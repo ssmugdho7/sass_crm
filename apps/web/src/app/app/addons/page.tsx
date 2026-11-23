@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { crm, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, ErrorText, Link, PageHeader, Spinner } from "@/components/ui";
 import type { Addon } from "./_types";
 
+const categoryIcon: Record<string, string> = { core: "🧱", finance: "💰", operations: "🛠️", payments: "💳", productivity: "📅" };
+
 export default function AddonsPage() {
   const { refresh } = useSession();
-  const [addons, setAddons] = useState<Addon[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const { data, setData, error: loadError } = useFetch<{ data: Addon[] }>("/app/addons");
+  const addons = data?.data ?? null;
+  const [actionError, setError] = useState<unknown>(null);
+  const error = actionError ?? loadError;
   const [busy, setBusy] = useState<string | null>(null);
-
-  useEffect(() => {
-    crm<{ data: Addon[] }>("/app/addons").then((r) => setAddons(r.data)).catch(setError);
-  }, []);
 
   const toggle = async (a: Addon) => {
     if (a.installed && !confirm(`Uninstall ${a.name}? Your settings are kept if you reinstall later.`)) return;
@@ -22,7 +23,7 @@ export default function AddonsPage() {
     setError(null);
     try {
       const next = await crm<Addon>(a.installed ? `/app/addons/${a.key}` : `/app/addons/${a.key}/install`, { method: a.installed ? "DELETE" : "POST" });
-      setAddons((cur) => cur?.map((x) => (x.key === a.key ? next : x)) ?? null);
+      setData((cur) => (cur ? { data: cur.data.map((x) => (x.key === a.key ? next : x)) } : cur));
       await refresh();
     } catch (e) {
       setError(e);
@@ -42,9 +43,12 @@ export default function AddonsPage() {
           {addons.map((a) => (
             <article key={a.key} className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{a.category}</p>
-                  <h2 className="mt-0.5 font-semibold text-slate-900">{a.name}</h2>
+                <div className="flex items-start gap-3">
+                  <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-xl">{categoryIcon[a.category] ?? "🧩"}</span>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{a.category}</p>
+                    <h2 className="mt-0.5 font-semibold text-slate-900">{a.name}</h2>
+                  </div>
                 </div>
                 {a.installed && <Badge tone="green">Installed</Badge>}
               </div>
@@ -56,7 +60,7 @@ export default function AddonsPage() {
                 <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>
                   {busy === a.key ? "Working…" : a.installed ? "Uninstall" : "Install"}
                 </Button>
-                {a.configurable && (
+                {a.installed && a.configurable && (
                   <Link href={`/app/addons/${a.key}`} className="text-sm font-medium text-brand-700 hover:underline">Configure →</Link>
                 )}
               </div>

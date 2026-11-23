@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { crm, can, money } from "@/lib/api";
+import { useState } from "react";
+import { crm, can, formatDate, money, toCents, toDollars } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
-import { idOrNull, toCents, toDollars, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
+import { idOrNull, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
 
 const CATEGORIES = ["materials", "labour", "equipment", "permits", "subcontractor", "other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -49,7 +50,7 @@ function CostingPanel({ c }: { c: Costing }) {
   ];
   return (
     <Card title={`Job costing — ${c.project.name}`} className="mb-6">
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Budget" value={money(c.budget)} />
         <Stat label="Total cost" value={money(c.total_cost)} hint={c.budget_used_percent != null ? `${c.budget_used_percent}% of budget` : "No budget set"} />
         <Stat label="Profit estimate" value={<span className={over ? "text-red-600" : "text-emerald-700"}>{money(c.profit_estimate)}</span>} hint={c.margin_percent != null ? `${c.margin_percent}% margin` : undefined} />
@@ -83,30 +84,17 @@ export default function ExpensesPage() {
   const { projects } = useLookups();
   const [filters, setFilters] = useState({ project_id: "", category: "", from: "", to: "" });
   const [page, setPage] = useState(1);
-  const [data, setData] = useState<ExpensePage | null>(null);
-  const [costing, setCosting] = useState<Costing | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [tick, setTick] = useState(0);
-  const reload = () => setTick((t) => t + 1);
+  const q = new URLSearchParams({ page: String(page) });
+  for (const [k, v] of Object.entries(filters)) if (v) q.set(k, v);
+  const { data, error, reload } = useFetch<ExpensePage>(`/app/expenses?${q}`);
+  // Costing is optional (only when a job is selected); errors just hide the panel.
+  const { data: costingData, error: costingError } = useFetch<Costing>(filters.project_id ? `/app/projects/${filters.project_id}/costing` : null);
+  const costing = filters.project_id && !costingError && costingData?.project.id === Number(filters.project_id) ? costingData : null;
 
   const [editing, setEditing] = useState<Expense | "new" | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [formError, setFormError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    const q = new URLSearchParams({ page: String(page) });
-    for (const [k, v] of Object.entries(filters)) if (v) q.set(k, v);
-    crm<ExpensePage>(`/app/expenses?${q}`)
-      .then((r) => live && (setData(r), setError(null)))
-      .catch((e) => live && setError(e));
-    const costingReq = filters.project_id ? crm<Costing>(`/app/projects/${filters.project_id}/costing`) : Promise.resolve(null);
-    costingReq.then((c) => live && setCosting(c)).catch(() => live && setCosting(null));
-    return () => {
-      live = false;
-    };
-  }, [filters, page, tick]);
 
   const setFilter = (k: keyof typeof filters, v: string) => {
     setPage(1);
@@ -198,13 +186,13 @@ export default function ExpensesPage() {
               </button>
             ))}
           </div>
-          <Card>
+          <Card className="max-sm:[&_:is(th,td):nth-child(n+4):nth-child(-n+6)]:hidden">
             <Table
               rows={data.data}
               onRow={open}
               empty="No expenses recorded."
               columns={[
-                ["Date", (e) => e.expense_date.slice(0, 10)],
+                ["Date", (e) => <span className="whitespace-nowrap">{formatDate(e.expense_date.slice(0, 10))}</span>],
                 ["Job", (e) => e.project?.name ?? <span className="text-slate-400">Overhead</span>],
                 ["Category", (e) => <Badge tone={e.category === "materials" ? "blue" : e.category === "subcontractor" ? "amber" : "gray"}>{e.category}</Badge>],
                 ["Vendor", (e) => e.vendor ?? "—"],
@@ -214,7 +202,7 @@ export default function ExpensesPage() {
               ]}
             />
             {(data.last_page ?? 1) > 1 && (
-              <div className="mt-4 flex items-center justify-end gap-2 text-sm">
+              <div className="mt-4 flex flex-wrap items-center justify-end gap-2 text-sm">
                 <Button variant="secondary" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
                 <span>Page {data.current_page} of {data.last_page}</span>
                 <Button variant="secondary" disabled={page >= (data.last_page ?? 1)} onClick={() => setPage(page + 1)}>Next</Button>
@@ -227,7 +215,7 @@ export default function ExpensesPage() {
       <Modal open={editing !== null} title={editing === "new" ? "Add expense" : "Expense"} onClose={() => setEditing(null)}>
         <form onSubmit={save} className="space-y-3">
           <fieldset disabled={!manage} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Amount ($)" error={fieldError(formError, "amount")}><Input type="number" min="0.01" step="0.01" value={form.amount} onChange={set("amount")} required /></Field>
               <Field label="Date" error={fieldError(formError, "expense_date")}><Input type="date" value={form.expense_date} onChange={set("expense_date")} required /></Field>
               <Field label="Category" error={fieldError(formError, "category")}>
@@ -247,7 +235,7 @@ export default function ExpensesPage() {
           <ErrorText error={formError && !Object.keys((formError as { errors?: object }).errors ?? {}).length ? formError : null} />
           {manage && (
             <div className="flex justify-between pt-2">
-              {editing !== "new" ? <Button type="button" variant="danger" onClick={remove}>Delete</Button> : <span />}
+              {editing !== "new" ? <Button type="button" variant="danger-ghost" onClick={remove}>Delete</Button> : <span />}
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
                 <Button disabled={saving}>{saving ? "Saving…" : "Save"}</Button>

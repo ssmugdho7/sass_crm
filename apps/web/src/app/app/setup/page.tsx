@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ApiError, can, crm, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Button, ErrorText, Field, Input, Link, Spinner, cx, fieldError } from "@/components/ui";
 import type { Addon } from "../addons/_types";
@@ -26,11 +27,18 @@ export default function SetupPage() {
 
   return (
     <Centered>
-      <p className="text-sm font-medium text-brand-700">Let&apos;s get you set up</p>
-      <h1 className="mt-1 text-2xl font-bold text-slate-900">Welcome to BuildCRM, {me.name.split(" ")[0]} 👋</h1>
-      <ol className="mt-6 flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="font-medium text-brand-700">Setup · Step {step + 1} of {STEPS.length}</span>
+        <Link href="/app" className="font-medium text-slate-500 hover:text-slate-900 hover:underline">Skip for now →</Link>
+      </div>
+      <h1 className="mt-3 text-2xl font-bold text-slate-900 sm:text-3xl">Welcome to BuildCRM, {me.name.split(" ")[0]} 👋</h1>
+      <p className="mt-1 text-sm text-slate-600">Three quick steps and your CRM and website are ready. You can change everything later.</p>
+      <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
+        <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+      </div>
+      <ol className="mt-4 flex items-center gap-2" aria-label="Setup progress">
         {STEPS.map((s, i) => (
-          <li key={s} className="flex flex-1 items-center gap-2">
+          <li key={s} className="flex flex-1 items-center gap-2" aria-current={i === step ? "step" : undefined}>
             <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", i < step ? "bg-brand-600 text-white" : i === step ? "bg-brand-100 text-brand-700 ring-2 ring-brand-500" : "bg-slate-100 text-slate-500")}>
               {i < step ? "✓" : i + 1}
             </span>
@@ -39,7 +47,7 @@ export default function SetupPage() {
           </li>
         ))}
       </ol>
-      <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 text-left shadow-sm">
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-lg shadow-slate-200/60 sm:p-8">
         {step === 0 && <CompanyStep onDone={async () => { await refresh(); setStep(1); }} />}
         {step === 1 && <AddonStep onBack={() => setStep(0)} onDone={async () => { await refresh(); setStep(2); }} />}
         {step === 2 && <WebsiteStep slug={me.tenant?.slug ?? ""} onBack={() => setStep(1)} />}
@@ -48,16 +56,17 @@ export default function SetupPage() {
   );
 }
 
-const Centered = ({ children }: { children: React.ReactNode }) => <div className="mx-auto max-w-2xl py-6 text-center">{children}</div>;
+const Centered = ({ children }: { children: React.ReactNode }) => (
+  <div className="-mx-4 flex min-h-[calc(100vh-8rem)] items-start justify-center rounded-2xl bg-gradient-to-b from-brand-50/70 to-transparent px-4 py-8 sm:mx-0 sm:py-12">
+    <div className="w-full max-w-2xl text-center">{children}</div>
+  </div>
+);
 
 function CompanyStep({ onDone }: { onDone: () => Promise<void> }) {
-  const [form, setForm] = useState<Company | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const { data: form, setData: setForm, error: loadError } = useFetch<Company>("/app/account/company");
+  const [saveError, setError] = useState<unknown>(null);
+  const error = saveError ?? loadError;
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    crm<Company>("/app/account/company").then(setForm).catch(setError);
-  }, []);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,20 +95,21 @@ function CompanyStep({ onDone }: { onDone: () => Promise<void> }) {
         <Field label="Business email" error={fieldError(error, "email")}><Input type="email" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
         <Field label="Business phone" error={fieldError(error, "phone")}><Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
       </div>
-      <div className="flex justify-end"><Button disabled={busy}>{busy ? "Saving…" : "Looks good — continue"}</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+        <Link href="/app" className="text-sm font-medium text-slate-500 hover:text-slate-900 hover:underline">Skip for now</Link>
+        <Button disabled={busy}>{busy ? "Saving…" : "Looks good — continue"}</Button>
+      </div>
     </form>
   );
 }
 
 function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promise<void> }) {
-  const [addons, setAddons] = useState<Addon[] | null>(null);
+  const { data, error: loadError } = useFetch<{ data: Addon[] }>("/app/addons");
+  const addons = data?.data ?? null;
   const [picked, setPicked] = useState<string[]>([]);
-  const [error, setError] = useState<unknown>(null);
+  const [saveError, setError] = useState<unknown>(null);
+  const error = saveError ?? loadError;
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    crm<{ data: Addon[] }>("/app/addons").then((r) => setAddons(r.data)).catch(setError);
-  }, []);
 
   const toggle = (k: string) => setPicked((cur) => (cur.includes(k) ? cur.filter((x) => x !== k) : [...cur, k]));
 

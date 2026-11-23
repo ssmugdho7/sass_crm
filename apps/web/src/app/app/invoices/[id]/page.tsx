@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { can, crm, money } from "@/lib/api";
+import { can, crm, formatDate, money } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { Button, Card, ErrorText, Link, PageHeader, Spinner, Stat, Table } from "@/components/ui";
 import { DocumentEditor } from "@/components/sales/DocumentEditor";
@@ -73,7 +73,7 @@ export default function InvoicePage() {
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="Total" value={money(doc.total)} />
         <Stat label="Paid" value={money(doc.amount_paid ?? 0)} />
-        <Stat label="Balance due" value={money(balance)} hint={doc.is_overdue ? `Overdue since ${doc.due_date}` : doc.due_date ? `Due ${doc.due_date}` : undefined} />
+        <Stat label="Balance due" value={money(balance)} hint={doc.is_overdue ? `Overdue since ${formatDate(doc.due_date)}` : doc.due_date ? `Due ${formatDate(doc.due_date)}` : undefined} />
       </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -83,9 +83,9 @@ export default function InvoicePage() {
           <>
             {!isVoid && balance > 0 && <Button disabled={busy} onClick={() => setPaying(true)}>Record payment</Button>}
             {doc.status === "draft" && <Button variant="secondary" disabled={busy} onClick={() => setStatus("sent")}>Mark as sent</Button>}
-            {!isVoid && <Button variant="ghost" disabled={busy} onClick={() => setStatus("void")}>Void</Button>}
+            {!isVoid && <Button variant="danger-ghost" disabled={busy} onClick={() => setStatus("void")}>Void</Button>}
             {isVoid && <Button variant="secondary" disabled={busy} onClick={() => setStatus("draft")}>Restore</Button>}
-            {!payments.length && <Button variant="ghost" className="ml-auto text-red-600" disabled={busy} onClick={remove}>Delete</Button>}
+            {!payments.length && <Button variant="danger-ghost" className="ml-auto" disabled={busy} onClick={remove}>Delete</Button>}
           </>
         )}
       </div>
@@ -99,11 +99,11 @@ export default function InvoicePage() {
           rows={payments}
           empty="No payments recorded yet."
           columns={[
-            ["Date", (p) => new Date(p.paid_at).toLocaleDateString()],
+            ["Date", (p) => formatDate(p.paid_at)],
             ["Amount", (p) => <span className="font-medium">{money(p.amount)}</span>],
             ["Method", (p) => PAYMENT_METHODS[p.method] ?? p.method],
             ["Reference", (p) => p.reference ?? "—"],
-            ["", (p) => (manage ? <button className="text-sm text-red-600 hover:underline" disabled={busy} onClick={() => deletePayment(p)}>Delete</button> : null)],
+            ["", (p) => (manage ? <Button variant="danger-ghost" className="px-2 py-1 text-xs" disabled={busy} onClick={() => deletePayment(p)} aria-label={`Delete ${money(p.amount)} payment`}>Delete</Button> : null)],
           ]}
         />
       </Card>

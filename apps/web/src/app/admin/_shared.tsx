@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { platform } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { Badge, Button, ErrorText, Field, Input, Modal, Select, fieldError } from "@/components/ui";
 
 export type Paginated<T> = { data: T[]; current_page: number; last_page: number; total: number };
@@ -26,33 +27,9 @@ export const TENANT_STATUSES = ["trial", "active", "past_due", "suspended", "can
 export const statusTone = (s: string) =>
   ({ active: "green", trial: "blue", past_due: "amber", suspended: "red", cancelled: "gray", disabled: "red" })[s] ?? "gray";
 export const StatusBadge = ({ status }: { status: string }) => <Badge tone={statusTone(status)}>{status.replace("_", " ")}</Badge>;
-export const date = (d: string | null | undefined) => (d ? new Date(d).toLocaleDateString() : "—");
-export const toCents = (dollars: string) => Math.round((parseFloat(dollars) || 0) * 100);
-export const toDollars = (cents: number) => (cents / 100).toFixed(2);
-
-/** Loads a platform endpoint; re-runs when path changes. */
-export function useLoad<T>(path: string | null) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const reload = useCallback(async () => {
-    if (!path) return;
-    try {
-      setData(await platform<T>(path));
-      setError(null);
-    } catch (e) {
-      setError(e);
-    }
-  }, [path]);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- data fetch on mount/path change
-    reload();
-  }, [reload]);
-  return { data, error, reload, setData };
-}
-
 export function Pager({ page, last, total, onPage }: { page: number; last: number; total: number; onPage: (p: number) => void }) {
   return (
-    <div className="flex items-center justify-between border-t border-slate-100 pt-3 text-sm text-slate-500">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm text-slate-500">
       <span>{total} total</span>
       <div className="flex items-center gap-2">
         <Button variant="secondary" className="px-3 py-1" disabled={page <= 1} onClick={() => onPage(page - 1)}>Prev</Button>
@@ -73,7 +50,7 @@ export function UserEditModal({ user, roles, onClose, onSaved }: { user: AdminUs
 }
 
 function UserForm({ user, roles: given, onClose, onSaved }: { user: AdminUser; roles?: Role[]; onClose: () => void; onSaved: () => void }) {
-  const { data: fetched } = useLoad<Role[]>(given || !user.tenant_id ? null : `/platform/tenants/${user.tenant_id}/roles`);
+  const { data: fetched } = useFetch<Role[]>(given || !user.tenant_id ? null : `/platform/tenants/${user.tenant_id}/roles`, "platform");
   const roles = given ?? fetched ?? [];
   const [form, setForm] = useState({
     name: user.name, email: user.email, phone: user.phone ?? "", status: user.status, role_id: user.role_id ? String(user.role_id) : "", password: "",
@@ -106,12 +83,12 @@ function UserForm({ user, roles: given, onClose, onSaved }: { user: AdminUser; r
   return (
     <form onSubmit={submit} className="space-y-3">
       <ErrorText error={error} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name" error={fieldError(error, "name")}><Input value={form.name} onChange={set("name")} required /></Field>
         <Field label="Phone" error={fieldError(error, "phone")}><Input value={form.phone} onChange={set("phone")} /></Field>
       </div>
       <Field label="Email" error={fieldError(error, "email")}><Input type="email" value={form.email} onChange={set("email")} required /></Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Role" error={fieldError(error, "role_id")}>
           <Select value={form.role_id} onChange={set("role_id")}>
             <option value="">— No role —</option>

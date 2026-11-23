@@ -2,17 +2,19 @@
 
 namespace Tests\Feature\Integrations;
 
-use App\Domains\Integrations\IntegrationsServiceProvider;
+use App\Domains\Integrations\Listeners\SyncAppointmentToGoogle;
 use App\Domains\Integrations\Models\CalendarEventLink;
 use App\Domains\Integrations\Models\GoogleCalendarToken;
 use App\Events\AppointmentSaved;
 use App\Models\Tenant;
 use App\Models\TenantModule;
 use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Crypt;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
@@ -30,7 +32,6 @@ class GoogleCalendarTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->app->register(IntegrationsServiceProvider::class);
         $this->tenant = Tenant::where('slug', 'demo-builders')->firstOrFail();
         TenantModule::withoutGlobalScope('tenant')->updateOrCreate(
             ['tenant_id' => $this->tenant->id, 'module_key' => 'google_calendar'],
@@ -38,11 +39,13 @@ class GoogleCalendarTest extends TestCase
         );
     }
 
-    private function state(array $override = []): string
+    /** Starts the OAuth flow as the owner and returns the opaque state nonce. */
+    private function state(): string
     {
-        $owner = User::where('email', 'owner@demo.test')->first();
+        Sanctum::actingAs(User::where('email', 'owner@demo.test')->first());
+        parse_str(parse_url($this->getJson('/api/app/integrations/google/connect')->json('url'), PHP_URL_QUERY), $q);
 
-        return Crypt::encryptString(json_encode(array_merge(['tenant_id' => $this->tenant->id, 'user_id' => $owner->id, 'exp' => now()->addMinutes(10)->timestamp], $override)));
+        return $q['state'];
     }
 
     private function connectToken(): void
@@ -78,7 +81,8 @@ class GoogleCalendarTest extends TestCase
         $this->assertSame('gcid-123.apps.googleusercontent.com', $q['client_id']);
         $this->assertSame('offline', $q['access_type']);
         $this->assertStringContainsString('calendar.events', $q['scope']);
-        $this->assertSame($this->tenant->id, json_decode(Crypt::decryptString($q['state']), true)['tenant_id']);
+        $this->assertSame(48, strlen($q['state']));
+        $this->assertSame($this->tenant->id, Cache::get('gcal_oauth:'.$q['state'])['tenant_id']);
 
         $this->getJson('/api/app/integrations/google/status')->assertOk()->assertJson(['connected' => false]);
     }
@@ -114,14 +118,27 @@ class GoogleCalendarTest extends TestCase
         $this->assertSame(0, GoogleCalendarToken::withoutGlobalScope('tenant')->count());
     }
 
-    public function test_callback_rejects_expired_or_tampered_state(): void
+    public function test_callback_rejects_unknown_reused_and_expired_state(): void
     {
-        Http::fake();
-        $this->get('/api/public/google/callback?code=x&state='.urlencode($this->state(['exp' => time() - 5])))
-            ->assertRedirect('http://127.0.0.1:3000/app/addons/google_calendar?error=1');
-        $this->get('/api/public/google/callback?code=x&state=tampered')
-            ->assertRedirect('http://127.0.0.1:3000/app/addons/google_calendar?error=1');
+        $error = 'http://127.0.0.1:3000/app/addons/google_calendar?error=1';
+        $idToken = 'h.'.rtrim(strtr(base64_encode(json_encode(['email' => 'boss@gmail.com'])), '+/', '-_'), '=').'.s';
+        Http::fake(['oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.abc', 'expires_in' => 3599, 'id_token' => $idToken])]);
+
+        $this->get('/api/public/google/callback?code=x&state=unknown')->assertRedirect($error);
+        $this->get('/api/public/google/callback?code=x')->assertRedirect($error);
         Http::assertNothingSent();
+
+        $state = $this->state();
+        $this->get('/api/public/google/callback?code=x&state='.urlencode($state))
+            ->assertRedirect('http://127.0.0.1:3000/app/addons/google_calendar?connected=1');
+        // Single use: replaying the same state fails without another token exchange.
+        $this->get('/api/public/google/callback?code=x&state='.urlencode($state))->assertRedirect($error);
+        Http::assertSentCount(1);
+
+        $expired = $this->state();
+        $this->travel(11)->minutes();
+        $this->get('/api/public/google/callback?code=x&state='.urlencode($expired))->assertRedirect($error);
+        Http::assertSentCount(1);
     }
 
     public function test_listener_creates_updates_and_deletes_google_event(): void
@@ -154,7 +171,15 @@ class GoogleCalendarTest extends TestCase
         $this->assertSame(0, CalendarEventLink::withoutGlobalScope('tenant')->count());
     }
 
-    public function test_listener_swallows_failures_and_skips_when_not_connected(): void
+    public function test_listener_is_queued_with_retries(): void
+    {
+        $listener = new SyncAppointmentToGoogle;
+        $this->assertInstanceOf(ShouldQueue::class, $listener);
+        $this->assertSame(3, $listener->tries);
+        $this->assertSame([10, 60, 300], $listener->backoff);
+    }
+
+    public function test_listener_throws_on_google_failure_and_skips_when_not_connected(): void
     {
         Http::fake(['*' => Http::response(['error' => 'boom'], 500)]);
         AppointmentSaved::dispatch($this->tenant->id, 999); // not connected → no-op
@@ -163,7 +188,12 @@ class GoogleCalendarTest extends TestCase
         $this->connectToken();
         $this->ensureAppointmentsTable();
         $id = DB::table('appointments')->insertGetId(['tenant_id' => $this->tenant->id, 'title' => 'X', 'starts_at' => '2026-12-01 09:00:00', 'ends_at' => '2026-12-01 10:00:00', 'status' => 'scheduled']);
-        AppointmentSaved::dispatch($this->tenant->id, $id); // 500 from Google must not throw
+        try {
+            AppointmentSaved::dispatch($this->tenant->id, $id); // 500 from Google throws so the queue retries
+            $this->fail('Expected the sync job to throw.');
+        } catch (RequestException $e) {
+            $this->assertSame(500, $e->response->status());
+        }
         $this->assertSame(0, CalendarEventLink::withoutGlobalScope('tenant')->count());
     }
 }

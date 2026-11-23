@@ -109,6 +109,11 @@ class WebsiteTest extends TestCase
         $this->actAs($this->owner());
         $before = $this->getJson('/api/app/website/checklist')->assertOk()->json();
         $this->assertFalse(collect($before['items'])->firstWhere('key', 'services')['done']);
+        $tabs = ['branding', 'hero', 'services', 'portfolio', 'testimonials', 'team', 'faqs', 'contact'];
+        foreach ($before['items'] as $item) {
+            $this->assertContains($item['tab'], $tabs, "Checklist item {$item['key']} needs a dashboard tab");
+        }
+        $this->assertSame('services', collect($before['items'])->firstWhere('key', 'services')['tab']);
 
         foreach (['A', 'B', 'C'] as $t) {
             $this->postJson('/api/app/website/services', ['title' => "Service $t"])->assertCreated();

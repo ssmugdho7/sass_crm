@@ -5,12 +5,16 @@ namespace Tests\Feature\Crm;
 use App\Domains\Crm\Database\DemoSeeder;
 use App\Domains\Identity\Actions\RegisterTenant;
 use App\Models\Customer;
+use App\Models\Estimate;
+use App\Models\Invoice;
 use App\Models\Lead;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -118,6 +122,56 @@ class CrmTest extends TestCase
         $this->getJson("/api/app/projects/{$pid}")->assertOk()->assertJsonCount(1, 'tasks')->assertJsonPath('customer.name', 'Acme');
         $this->getJson('/api/app/projects?status=in_progress&per_page=100')->assertOk()->assertJsonCount(1, 'data');
         $this->getJson("/api/app/tasks?project_id={$pid}&status=open")->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    private function billingDoc(string $class, int $customerId, ?int $projectId): void
+    {
+        $class::withoutGlobalScope('tenant')->forceCreate([
+            'tenant_id' => $this->owner()->tenant_id, 'customer_id' => $customerId, 'project_id' => $projectId, 'number' => uniqid('D-'),
+            'issue_date' => now()->toDateString(), 'items' => [], 'public_token' => bin2hex(random_bytes(16)),
+        ]);
+    }
+
+    public function test_customer_with_billing_history_cannot_be_deleted(): void
+    {
+        Sanctum::actingAs($this->owner(), ['crm']);
+        $withInvoice = $this->postJson('/api/app/customers', ['name' => 'Has Invoice'])->json('id');
+        $withEstimate = $this->postJson('/api/app/customers', ['name' => 'Has Estimate'])->json('id');
+        $clean = $this->postJson('/api/app/customers', ['name' => 'Clean'])->json('id');
+        $this->billingDoc(Invoice::class, $withInvoice, null);
+        $this->billingDoc(Estimate::class, $withEstimate, null);
+
+        $this->deleteJson("/api/app/customers/{$withInvoice}")->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'estimates or invoices'));
+        $this->deleteJson("/api/app/customers/{$withEstimate}")->assertStatus(422);
+        $this->assertSame(1, Invoice::where('customer_id', $withInvoice)->count());
+        $this->assertNotNull(Customer::find($withEstimate));
+        $this->deleteJson("/api/app/customers/{$clean}")->assertNoContent();
+    }
+
+    public function test_project_with_linked_records_cannot_be_deleted(): void
+    {
+        Sanctum::actingAs($this->owner(), ['crm']);
+        $cid = $this->postJson('/api/app/customers', ['name' => 'Acme'])->json('id');
+        $invoiced = $this->postJson('/api/app/projects', ['name' => 'Invoiced', 'customer_id' => $cid])->json('id');
+        $estimated = $this->postJson('/api/app/projects', ['name' => 'Estimated', 'customer_id' => $cid])->json('id');
+        $clean = $this->postJson('/api/app/projects', ['name' => 'Clean', 'customer_id' => $cid])->json('id');
+        $this->billingDoc(Invoice::class, $cid, $invoiced);
+        $this->billingDoc(Estimate::class, $cid, $estimated);
+
+        $this->deleteJson("/api/app/projects/{$invoiced}")->assertStatus(422);
+        $this->deleteJson("/api/app/projects/{$estimated}")->assertStatus(422);
+
+        if (Schema::hasTable('expenses')) {
+            $withExpense = $this->postJson('/api/app/projects', ['name' => 'Expensed'])->json('id');
+            DB::table('expenses')->insert([
+                'tenant_id' => $this->owner()->tenant_id, 'project_id' => $withExpense, 'amount' => 1000,
+                'expense_date' => now()->toDateString(), 'created_at' => now(), 'updated_at' => now(),
+            ]);
+            $this->deleteJson("/api/app/projects/{$withExpense}")->assertStatus(422);
+        }
+
+        $this->assertNotNull(Project::find($invoiced));
+        $this->deleteJson("/api/app/projects/{$clean}")->assertNoContent();
     }
 
     public function test_dashboard_shape(): void

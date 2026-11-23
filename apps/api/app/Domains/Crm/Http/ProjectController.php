@@ -2,8 +2,12 @@
 
 namespace App\Domains\Crm\Http;
 
+use App\Models\Estimate;
+use App\Models\Invoice;
 use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ProjectController
 {
@@ -48,9 +52,28 @@ class ProjectController
     public function destroy(int $projectId)
     {
         $project = Project::findOrFail($projectId);
+        if ($this->hasLinkedRecords($project)) {
+            return response()->json([
+                'message' => 'This project has invoices, estimates, expenses, timesheets or subcontractors linked to it. Remove those first, or mark the project cancelled instead.',
+            ], 422);
+        }
         $project->delete();
 
         return response()->noContent();
+    }
+
+    private function hasLinkedRecords(Project $project): bool
+    {
+        if (Invoice::where('project_id', $project->id)->exists() || Estimate::where('project_id', $project->id)->exists()) {
+            return true;
+        }
+        foreach (['expenses', 'timesheets', 'subcontractor_project'] as $table) {
+            if (Schema::hasTable($table) && DB::table($table)->where('project_id', $project->id)->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function validated(Request $request): array

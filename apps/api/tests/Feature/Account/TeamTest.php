@@ -63,13 +63,19 @@ class TeamTest extends AccountTestCase
         $this->deleteJson("/api/app/team/users/{$owner->id}")->assertNoContent();
         $this->assertNull(User::find($owner->id));
 
-        // Now `second` is the last owner; a manager with team.manage cannot delete or demote them.
+        // Now `second` is the last owner; a manager with team.manage cannot delete, disable or demote them.
         $managerRole = $this->role('project-manager');
         $managerRole->update(['permissions' => [...$managerRole->permissions, 'team.view', 'team.manage']]);
         Sanctum::actingAs($this->makeUser('project-manager', 'pm@demo.test'), ['crm']);
+        $this->deleteJson("/api/app/team/users/{$admin->id}")->assertForbidden();
+        $this->postJson("/api/app/team/users/{$admin->id}/disable")->assertForbidden();
+        $this->putJson("/api/app/team/users/{$admin->id}", ['role_id' => $managerRole->id])->assertForbidden();
+
+        // Even the owner themselves cannot demote the last owner.
+        Sanctum::actingAs($admin, ['crm']);
+        $other = $this->makeUser('owner', 'third@demo.test');
+        $other->update(['status' => 'disabled']);
         $this->deleteJson("/api/app/team/users/{$admin->id}")->assertUnprocessable();
-        $this->postJson("/api/app/team/users/{$admin->id}/disable")->assertUnprocessable();
-        $this->putJson("/api/app/team/users/{$admin->id}", ['role_id' => $managerRole->id])->assertUnprocessable();
     }
 
     public function test_field_crew_is_forbidden_from_team_management(): void

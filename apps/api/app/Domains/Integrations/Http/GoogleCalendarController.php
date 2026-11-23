@@ -11,22 +11,29 @@ use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class GoogleCalendarController extends Controller
 {
+    private const STATE_PREFIX = 'gcal_oauth:';
+
+    private const STATE_TTL_MINUTES = 10;
+
     public function connect(Request $request): JsonResponse
     {
         $config = TenantModuleConfig::for(CurrentTenant::get(), 'google_calendar') ?? [];
         if (empty($config['client_id']) || empty($config['client_secret'])) {
             return response()->json(['message' => 'Add your Google client ID and client secret in the add-on settings first.'], 422);
         }
-        $state = Crypt::encryptString(json_encode([
-            'tenant_id' => CurrentTenant::id(), 'user_id' => $request->user()->id, 'exp' => now()->addMinutes(15)->timestamp,
-        ]));
+        // Opaque, single-use, short-lived nonce; the binding to tenant/user lives server-side only.
+        $state = Str::random(48);
+        Cache::put(self::STATE_PREFIX.$state, [
+            'tenant_id' => CurrentTenant::id(), 'user_id' => $request->user()->id,
+        ], now()->addMinutes(self::STATE_TTL_MINUTES));
 
         return response()->json(['url' => GoogleCalendarClient::AUTH_URL.'?'.http_build_query([
             'client_id' => $config['client_id'],
@@ -58,10 +65,17 @@ class GoogleCalendarController extends Controller
     {
         $back = TenantModuleConfig::frontend('/app/addons/google_calendar');
         try {
-            $state = json_decode(Crypt::decryptString((string) $request->query('state')), true);
-            $tenant = Tenant::find($state['tenant_id'] ?? 0);
+            // The state nonce is pulled (single use) and expires after STATE_TTL_MINUTES.
+            // Residual risk: the API is bearer-token based with no browser session, so the callback
+            // cannot prove the browser finishing the flow is the one that started it. An attacker who
+            // obtains a fresh, unused nonce for *their own* tenant could only connect a Google account
+            // to that tenant; they cannot target another tenant (the tenant comes from the server-side
+            // nonce, and the code is exchanged with that tenant's own client credentials).
+            $nonce = (string) $request->query('state');
+            $state = $nonce !== '' ? Cache::pull(self::STATE_PREFIX.$nonce) : null;
+            $tenant = is_array($state) ? Tenant::find($state['tenant_id'] ?? 0) : null;
             $config = $tenant ? TenantModuleConfig::for($tenant, 'google_calendar') : null;
-            if (! $tenant || ! $config || ($state['exp'] ?? 0) < time() || ! $request->filled('code')
+            if (! $tenant || ! $config || ! $request->filled('code')
                 || empty($config['client_id']) || empty($config['client_secret'])) {
                 return redirect()->away($back.'?error=1');
             }

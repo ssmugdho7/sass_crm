@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useFetch } from "@/lib/useFetch";
 import { ApiError, can, crm } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { Button, Card, ErrorText, Field, Input, PageHeader, fieldError } from "@/components/ui";
@@ -21,14 +22,11 @@ export default function SettingsPage() {
 
 function CompanyCard({ editable }: { editable: boolean }) {
   const { refresh } = useSession();
-  const [form, setForm] = useState<Company | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const { data: form, setData: setForm, error: loadError } = useFetch<Company>("/app/account/company");
+  const [saveError, setError] = useState<unknown>(null);
+  const error = saveError ?? loadError;
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    crm<Company>("/app/account/company").then(setForm).catch(setError);
-  }, []);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();

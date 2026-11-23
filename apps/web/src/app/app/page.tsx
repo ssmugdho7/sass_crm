@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { can, money } from "@/lib/api";
+import { can, formatDate, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Card, ErrorText, Link, PageHeader, Spinner, Stat } from "@/components/ui";
-import { isOverdue, label, tone, useFetch, type Lead, type Task } from "./projects/_crm/shared";
+import { isOverdue, label, tone, type Lead, type Task } from "./projects/_crm/shared";
 
 type Dashboard = {
   stats: {
@@ -27,7 +28,7 @@ function TrialBanner() {
   return (
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-200 bg-brand-50 px-5 py-3 text-sm text-brand-800">
       <span>
-        You&apos;re on a free trial — <strong>{days} {days === 1 ? "day" : "days"} left</strong> (ends {new Date(t.trial_ends_at).toLocaleDateString()}).
+        You&apos;re on a free trial — <strong>{days} {days === 1 ? "day" : "days"} left</strong> (ends {formatDate(t.trial_ends_at)}).
       </span>
       {can(me, "team.manage") && <Link href="/app/billing" className="font-medium underline">Choose a plan</Link>}
     </div>
@@ -101,7 +102,7 @@ export default function DashboardPage() {
                         <p className="truncate text-xs text-slate-500">{t.project?.name ?? "No project"}</p>
                       </div>
                       <span className={isOverdue(t) ? "shrink-0 font-medium text-red-600" : "shrink-0 text-slate-600"}>
-                        {t.due_date}{isOverdue(t) && " · overdue"}
+                        {formatDate(t.due_date)}{isOverdue(t) && " · overdue"}
                       </span>
                     </li>
                   ))}

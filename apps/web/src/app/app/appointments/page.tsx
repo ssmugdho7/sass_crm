@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { crm, can } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { crm, can, formatDate } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
-import { addDays, idOrNull, localDateTime, startOfWeek, useLookups, ymd } from "./_ops/shared";
+import { addDays, dayHeader, idOrNull, localDateTime, startOfWeek, timeOf as time, useLookups, ymd } from "./_ops/shared";
 
 type Appointment = {
   id: number;
@@ -28,8 +29,6 @@ type Status = "requested" | "confirmed" | "completed" | "cancelled";
 const STATUSES: Status[] = ["requested", "confirmed", "completed", "cancelled"];
 const tone: Record<Status, string> = { requested: "amber", confirmed: "blue", completed: "green", cancelled: "gray" };
 
-const time = (s: string) => new Date(s).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const dateLabel = (d: Date) => d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
 
 const blank = () => {
   const s = new Date();
@@ -47,34 +46,16 @@ export default function AppointmentsPage() {
   const { users, projects } = useLookups();
   const [week, setWeek] = useState(() => startOfWeek(new Date()));
   const [view, setView] = useState<"week" | "list">("week");
-  const [rows, setRows] = useState<Appointment[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const [actionError, setActionError] = useState<unknown>(null);
   const [editing, setEditing] = useState<Appointment | "new" | null>(null);
   const [form, setForm] = useState<Form>(blank);
   const [formError, setFormError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
 
-  const [tick, setTick] = useState(0);
-  const load = useCallback(() => setTick((t) => t + 1), []);
-
-  useEffect(() => {
-    let live = true;
-    const to = `${ymd(addDays(week, 6))} 23:59:59`;
-    crm<{ data: Appointment[] }>(`/app/appointments?from=${ymd(week)}&to=${encodeURIComponent(to)}`)
-      .then((r) => {
-        if (!live) return;
-        setRows(r.data);
-        setError(null);
-      })
-      .catch((e) => {
-        if (!live) return;
-        setError(e);
-        setRows([]);
-      });
-    return () => {
-      live = false;
-    };
-  }, [week, tick]);
+  const to = `${ymd(addDays(week, 6))} 23:59:59`;
+  const { data, error: loadError, reload: load } = useFetch<{ data: Appointment[] }>(`/app/appointments?from=${ymd(week)}&to=${encodeURIComponent(to)}`);
+  const rows = useMemo(() => data?.data ?? (loadError ? [] : null), [data, loadError]);
+  const error = actionError ?? loadError;
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week]);
   const byDay = useMemo(() => {
@@ -126,9 +107,10 @@ export default function AppointmentsPage() {
   const setStatus = async (a: Appointment, status: Status) => {
     try {
       await crm(`/app/appointments/${a.id}`, { method: "PATCH", body: { status } });
+      setActionError(null);
       load();
     } catch (e) {
-      setError(e);
+      setActionError(e);
     }
   };
 
@@ -175,11 +157,11 @@ export default function AppointmentsPage() {
       )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={() => setWeek(addDays(week, -7))} aria-label="Previous week">←</Button>
           <Button variant="secondary" onClick={() => setWeek(startOfWeek(new Date()))}>This week</Button>
           <Button variant="secondary" onClick={() => setWeek(addDays(week, 7))} aria-label="Next week">→</Button>
-          <span className="ml-2 text-sm font-medium text-slate-700">{dateLabel(week)} – {dateLabel(addDays(week, 6))}</span>
+          <span className="text-sm font-medium text-slate-700 sm:ml-2">{formatDate(ymd(week))} – {formatDate(ymd(addDays(week, 6)))}</span>
         </div>
         <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
           {(["week", "list"] as const).map((v) => (
@@ -192,25 +174,37 @@ export default function AppointmentsPage() {
       {rows === null ? (
         <Spinner />
       ) : view === "week" ? (
-        <div className="grid gap-3 md:grid-cols-7">
-          {days.map((d) => {
-            const isToday = ymd(d) === ymd(new Date());
-            return (
-              <div key={ymd(d)} className={`min-h-32 rounded-xl border p-2 ${isToday ? "border-brand-300 bg-brand-50/40" : "border-slate-200 bg-slate-50"}`}>
-                <p className={`mb-2 text-xs font-semibold uppercase ${isToday ? "text-brand-700" : "text-slate-500"}`}>{dateLabel(d)}</p>
-                <div className="space-y-2">{(byDay[ymd(d)] ?? []).map(chip)}</div>
-              </div>
-            );
-          })}
-        </div>
+        <>
+          <div className="hidden gap-3 md:grid md:grid-cols-7">
+            {days.map((d) => {
+              const isToday = ymd(d) === ymd(new Date());
+              return (
+                <div key={ymd(d)} className={`min-h-32 min-w-0 rounded-xl border p-2 ${isToday ? "border-brand-300 bg-brand-50/40" : "border-slate-200 bg-slate-50"}`}>
+                  <p className={`mb-2 text-xs font-semibold uppercase ${isToday ? "text-brand-700" : "text-slate-500"}`}>{dayHeader(d)}</p>
+                  <div className="space-y-2">{(byDay[ymd(d)] ?? []).map(chip)}</div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Small screens: agenda list of days that have appointments. */}
+          <div className="space-y-4 md:hidden">
+            {days.filter((d) => byDay[ymd(d)]?.length).length === 0 && <p className="py-10 text-center text-sm text-slate-500">No appointments this week.</p>}
+            {days.filter((d) => byDay[ymd(d)]?.length).map((d) => (
+              <section key={ymd(d)}>
+                <p className={`mb-2 text-xs font-semibold uppercase ${ymd(d) === ymd(new Date()) ? "text-brand-700" : "text-slate-500"}`}>{dayHeader(d)}</p>
+                <div className="space-y-2">{byDay[ymd(d)].map(chip)}</div>
+              </section>
+            ))}
+          </div>
+        </>
       ) : (
-        <Card>
+        <Card className="max-sm:[&_:is(th,td):nth-child(n+3):nth-child(-n+6)]:hidden">
           <Table
             rows={rows}
             onRow={open}
             empty="No appointments this week."
             columns={[
-              ["When", (a) => <span className="whitespace-nowrap">{dateLabel(new Date(a.starts_at))}, {time(a.starts_at)}</span>],
+              ["When", (a) => <span className="whitespace-nowrap">{formatDate(a.starts_at, true)}</span>],
               ["Title", (a) => <span className="font-medium text-slate-900">{a.title}</span>],
               ["Contact", (a) => a.contact_name ?? a.lead?.name ?? "—"],
               ["Project", (a) => a.project?.name ?? "—"],
@@ -218,7 +212,7 @@ export default function AppointmentsPage() {
               ["Source", (a) => <Badge tone={a.source === "website" ? "amber" : "gray"}>{a.source}</Badge>],
               ["Status", (a) =>
                 manage ? (
-                  <Select value={a.status} onClick={(e) => e.stopPropagation()} onChange={(e) => setStatus(a, e.target.value as Status)} className="w-36 py-1">
+                  <Select value={a.status} onClick={(e) => e.stopPropagation()} onChange={(e) => setStatus(a, e.target.value as Status)} className="w-32 py-1 sm:w-36">
                     {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </Select>
                 ) : (
@@ -236,11 +230,11 @@ export default function AppointmentsPage() {
               <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">Booked from your website{editing.lead ? ` · lead: ${editing.lead.name}` : ""}.</p>
             )}
             <Field label="Title" error={fieldError(formError, "title")}><Input value={form.title} onChange={set("title")} required /></Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Starts" error={fieldError(formError, "starts_at")}><Input type="datetime-local" value={form.starts_at} onChange={set("starts_at")} required /></Field>
               <Field label="Ends" error={fieldError(formError, "ends_at")}><Input type="datetime-local" value={form.ends_at} onChange={set("ends_at")} required /></Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Status">
                 <Select value={form.status} onChange={set("status")}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</Select>
               </Field>
@@ -258,7 +252,7 @@ export default function AppointmentsPage() {
               </Select>
             </Field>
             <Field label="Location"><Input value={form.location} onChange={set("location")} /></Field>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field label="Contact name"><Input value={form.contact_name} onChange={set("contact_name")} /></Field>
               <Field label="Email" error={fieldError(formError, "contact_email")}><Input type="email" value={form.contact_email} onChange={set("contact_email")} /></Field>
               <Field label="Phone"><Input value={form.contact_phone} onChange={set("contact_phone")} /></Field>
@@ -268,7 +262,7 @@ export default function AppointmentsPage() {
           <ErrorText error={formError && !Object.keys((formError as { errors?: object }).errors ?? {}).length ? formError : null} />
           {manage && (
             <div className="flex justify-between pt-2">
-              {editing !== "new" ? <Button type="button" variant="danger" onClick={remove}>Delete</Button> : <span />}
+              {editing !== "new" ? <Button type="button" variant="danger-ghost" onClick={remove}>Delete</Button> : <span />}
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
                 <Button disabled={saving}>{saving ? "Saving…" : "Save"}</Button>

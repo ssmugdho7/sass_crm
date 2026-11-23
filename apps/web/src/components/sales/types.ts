@@ -42,9 +42,3 @@ export function calcTotals(items: LineItem[], taxRate: number) {
   const tax = Math.round((subtotal * (Number(taxRate) || 0)) / 100);
   return { lines, subtotal, tax, total: subtotal + tax };
 }
-
-export const toCents = (dollars: string) => {
-  const n = Number(String(dollars).replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? Math.round(n * 100) : 0;
-};
-export const toDollars = (cents: number) => (cents / 100).toFixed(2);

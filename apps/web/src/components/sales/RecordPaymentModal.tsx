@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { crm, money } from "@/lib/api";
+import { crm, money, toCents, toDollars } from "@/lib/api";
 import { Button, ErrorText, Field, Input, Modal, Select, fieldError } from "@/components/ui";
-import { PAYMENT_METHODS, toCents, toDollars, type Payment, type SalesDoc } from "./types";
+import { PAYMENT_METHODS, type Payment, type SalesDoc } from "./types";
 
 /** Mount only while open (state initialises from the current balance). */
 const MANUAL = ["cash", "bank_transfer", "check", "card"];
@@ -21,7 +21,7 @@ export function RecordPaymentModal({ open, invoiceId, balance, onClose, onRecord
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  const cents = toCents(amount);
+  const cents = toCents(amount) ?? 0;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);

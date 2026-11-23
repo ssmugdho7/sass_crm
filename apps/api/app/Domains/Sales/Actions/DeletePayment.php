@@ -6,7 +6,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Support\Facades\DB;
 
-/** Removes a payment and recalculates the invoice's amount_paid / status. */
+/** Removes a payment and recalculates the invoice's amount_paid / status (under the invoice row lock). */
 class DeletePayment
 {
     public function __construct(private RefreshInvoiceStatus $refresh) {}
@@ -15,9 +15,11 @@ class DeletePayment
     {
         return DB::transaction(function () use ($payment) {
             $invoice = Invoice::withoutGlobalScope('tenant')->where('tenant_id', $payment->tenant_id)->findOrFail($payment->invoice_id);
-            $payment->delete();
+            RefreshInvoiceStatus::lock($invoice);
+            // A concurrent delete of the same payment already adjusted amount_paid; don't subtract twice.
+            $deleted = Payment::withoutGlobalScope('tenant')->whereKey($payment->id)->delete();
 
-            return ($this->refresh)($invoice, -(int) $payment->amount);
+            return ($this->refresh)($invoice, $deleted ? -(int) $payment->amount : 0);
         });
     }
 }

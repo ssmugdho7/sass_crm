@@ -20,9 +20,10 @@ class StripeController extends Controller
     public function checkout(string $token): JsonResponse
     {
         $invoice = Invoice::withoutGlobalScope('tenant')->where('public_token', $token)->first();
-        abort_if(! $invoice, 404, 'Invoice not found.');
-        $tenant = Tenant::find($invoice->tenant_id);
-        $config = $tenant ? TenantModuleConfig::for($tenant, 'payment_gateway') : null;
+        $tenant = $invoice ? Tenant::find($invoice->tenant_id) : null;
+        // Suspended/cancelled/expired-trial accounts look exactly like an unknown token.
+        abort_if(! $tenant || ! $tenant->isAccessible(), 404, 'Invoice not found.');
+        $config = TenantModuleConfig::for($tenant, 'payment_gateway');
         $secret = (string) ($config['secret_key'] ?? '');
         if ($secret === '') {
             return $this->fail('Online payment is not available for this invoice.');

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, money } from "@/lib/api";
+import { api, formatDate, money } from "@/lib/api";
 import { Button, ErrorText, Spinner } from "@/components/ui";
 import { StatusBadge } from "./StatusBadge";
 import type { DocKind } from "./types";
@@ -17,8 +17,6 @@ type PublicPayload = {
   customer: { name: string; email: string | null; phone: string | null; address: string | null; city: string | null } | null;
   can_pay_online: boolean;
 };
-
-const fmtDate = (d?: string | null) => (d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-US", { dateStyle: "medium" }) : "—");
 
 /** Clean, printable client-facing invoice / estimate. */
 export function PublicDocument({ kind, token, paid = false }: { kind: DocKind; token: string; paid?: boolean }) {
@@ -112,30 +110,32 @@ export function PublicDocument({ kind, token, paid = false }: { kind: DocKind; t
             {d.project && <p className="mt-3 text-slate-600"><span className="font-medium">Project:</span> {d.project}{d.site_address ? ` — ${d.site_address}` : ""}</p>}
           </div>
           <dl className="grid grid-cols-2 gap-y-1 sm:text-right">
-            <dt className="text-slate-500">Issued</dt><dd className="text-slate-800">{fmtDate(d.issue_date)}</dd>
+            <dt className="text-slate-500">Issued</dt><dd className="text-slate-800">{formatDate(d.issue_date)}</dd>
             <dt className="text-slate-500">{isInvoice ? "Due" : "Valid until"}</dt>
-            <dd className="text-slate-800">{fmtDate(isInvoice ? d.due_date : d.expiry_date)}</dd>
+            <dd className="text-slate-800">{formatDate(isInvoice ? d.due_date : d.expiry_date)}</dd>
           </dl>
         </section>
 
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b-2 border-slate-200 text-left text-xs uppercase text-slate-500">
-            <tr><th className="py-2 font-medium">Description</th><th className="py-2 text-right font-medium">Qty</th><th className="py-2 text-right font-medium">Unit price</th><th className="py-2 text-right font-medium">Amount</th></tr>
+            <tr><th className="py-2 font-medium">Description</th><th className="py-2 text-right font-medium">Qty</th><th className="hidden py-2 text-right font-medium sm:table-cell print:table-cell">Unit price</th><th className="py-2 text-right font-medium">Amount</th></tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {d.items.map((i, idx) => (
               <tr key={idx} className="break-inside-avoid">
                 <td className="py-2.5 pr-4 text-slate-800">{i.description}</td>
                 <td className="py-2.5 text-right text-slate-700">{i.quantity}</td>
-                <td className="py-2.5 text-right text-slate-700">{money(i.unit_price)}</td>
+                <td className="hidden py-2.5 text-right text-slate-700 sm:table-cell print:table-cell">{money(i.unit_price)}</td>
                 <td className="py-2.5 text-right font-medium text-slate-900">{money(i.amount)}</td>
               </tr>
             ))}
           </tbody>
         </table>
+        </div>
 
         <div className="mt-6 flex justify-end">
-          <dl className="w-64 space-y-1 text-sm">
+          <dl className="w-full space-y-1 text-sm sm:w-64">
             <div className="flex justify-between"><dt className="text-slate-500">Subtotal</dt><dd>{money(d.subtotal)}</dd></div>
             <div className="flex justify-between"><dt className="text-slate-500">Tax ({d.tax_rate}%)</dt><dd>{money(d.tax)}</dd></div>
             <div className="flex justify-between border-t border-slate-200 pt-1 text-base font-bold"><dt>Total</dt><dd>{money(d.total)}</dd></div>

@@ -7,25 +7,23 @@ use App\Domains\Integrations\Services\GoogleCalendarClient;
 use App\Events\AppointmentSaved;
 use App\Models\Tenant;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-/** Mirrors appointments into the tenant's Google Calendar. Never throws: failures are logged. */
-class SyncAppointmentToGoogle
+/**
+ * Mirrors appointments into the tenant's Google Calendar. Runs on the queue; Google/HTTP failures
+ * throw so the job is retried (404/410 on delete count as success). Final failure is logged.
+ */
+class SyncAppointmentToGoogle implements ShouldQueue
 {
-    public function handle(AppointmentSaved $event): void
-    {
-        try {
-            $this->sync($event);
-        } catch (Throwable $e) {
-            Log::warning('Google Calendar sync failed', [
-                'tenant_id' => $event->tenantId, 'appointment_id' => $event->appointmentId, 'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    public int $tries = 3;
 
-    private function sync(AppointmentSaved $event): void
+    /** @var array<int, int> */
+    public array $backoff = [10, 60, 300];
+
+    public function handle(AppointmentSaved $event): void
     {
         $tenant = Tenant::find($event->tenantId);
         $client = $tenant ? GoogleCalendarClient::forTenant($tenant) : null;
@@ -63,6 +61,13 @@ class SyncAppointmentToGoogle
         $id = $client->createEvent($body);
         $link = new CalendarEventLink;
         $link->forceFill(['tenant_id' => $tenant->id, 'appointment_id' => $appointment->id, 'google_event_id' => $id])->save();
+    }
+
+    public function failed(AppointmentSaved $event, Throwable $e): void
+    {
+        Log::warning('Google Calendar sync failed', [
+            'tenant_id' => $event->tenantId, 'appointment_id' => $event->appointmentId, 'error' => $e->getMessage(),
+        ]);
     }
 
     private function eventBody(object $a): array

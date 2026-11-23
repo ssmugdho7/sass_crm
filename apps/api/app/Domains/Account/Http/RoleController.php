@@ -3,6 +3,7 @@
 namespace App\Domains\Account\Http;
 
 use App\Domains\Account\Support\Permissions;
+use App\Domains\Account\Support\TeamGuard;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Tenancy\CurrentTenant;
@@ -28,6 +29,7 @@ class RoleController
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        TeamGuard::ensureCanGrant($request->user(), $data['permissions']);
         $slug = $base = Str::slug($data['name']) ?: 'role';
         for ($i = 2; Role::where('tenant_id', CurrentTenant::id())->where('slug', $slug)->exists(); $i++) {
             $slug = "{$base}-{$i}";
@@ -43,15 +45,19 @@ class RoleController
     {
         $model = $this->find($role);
         abort_if($model->is_system, 422, 'The owner role is locked.');
-        $model->update($this->validated($request, $model));
+        TeamGuard::ensureCanEditRole($request->user(), $model);
+        $data = $this->validated($request, $model);
+        TeamGuard::ensureCanGrant($request->user(), $data['permissions']);
+        $model->update($data);
 
         return $model;
     }
 
-    public function destroy(int $role)
+    public function destroy(Request $request, int $role)
     {
         $model = $this->find($role);
         abort_if($model->is_system, 422, 'The owner role is locked.');
+        TeamGuard::ensureCanEditRole($request->user(), $model);
         abort_if(User::where('role_id', $model->id)->exists(), 422, 'Reassign the users in this role before deleting it.');
         $model->delete();
 

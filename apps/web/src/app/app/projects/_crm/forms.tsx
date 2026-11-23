@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { crm } from "@/lib/api";
+import { crm, toCents, toDollars } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { Button, ErrorText, Field, Input, Select, Textarea, fieldError } from "@/components/ui";
 import {
-  PRIORITIES, PROJECT_STATUSES, TASK_STATUSES, idOrNull, label, orNull, toCents, toDollars, useFetch, useUsers,
+  PRIORITIES, PROJECT_STATUSES, TASK_STATUSES, idOrNull, label, orNull, useUsers,
   type Customer, type Page, type Project, type Task,
 } from "./shared";
 
@@ -28,7 +29,7 @@ export function ProjectForm({ project, customerId, onSaved, onCancel }: { projec
     try {
       const body = {
         name: f.name, customer_id: idOrNull(f.customer_id), site_address: orNull(f.site_address), status: f.status,
-        start_date: f.start_date || null, due_date: f.due_date || null, budget: toCents(f.budget),
+        start_date: f.start_date || null, due_date: f.due_date || null, budget: toCents(f.budget) ?? 0,
         manager_id: idOrNull(f.manager_id), description: orNull(f.description),
       };
       onSaved(await crm<Project>(project ? `/app/projects/${project.id}` : "/app/projects", { method: project ? "PUT" : "POST", body }));

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { crm, can, money } from "@/lib/api";
+import { useState } from "react";
+import { crm, can, formatDate, money, toCents, toDollars } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
-import { toCents, toDollars, useLookups, type Paginated } from "../appointments/_ops/shared";
+import { useLookups, type Paginated } from "../appointments/_ops/shared";
 
 type Assignment = { id: number; name: string; status: string; pivot: { scope: string | null; agreed_amount: number } };
 type Sub = {
@@ -32,9 +33,9 @@ type Form = typeof empty;
 
 function Insurance({ s }: { s: Sub }) {
   if (!s.insurance_expiry) return <Badge tone="gray">No insurance on file</Badge>;
-  if (s.insurance_expired) return <Badge tone="red">Expired {s.insurance_expiry}</Badge>;
-  if (s.insurance_expiring) return <Badge tone="amber">Expires {s.insurance_expiry}</Badge>;
-  return <span className="text-slate-600">{s.insurance_expiry}</span>;
+  if (s.insurance_expired) return <Badge tone="red">Expired {formatDate(s.insurance_expiry)}</Badge>;
+  if (s.insurance_expiring) return <Badge tone="amber">Expires {formatDate(s.insurance_expiry)}</Badge>;
+  return <span className="whitespace-nowrap text-slate-600">{formatDate(s.insurance_expiry)}</span>;
 }
 
 export default function SubcontractorsPage() {
@@ -42,31 +43,19 @@ export default function SubcontractorsPage() {
   const manage = can(me, "subcontractors.manage");
   const { projects } = useLookups();
   const [filters, setFilters] = useState({ search: "", trade: "", status: "", expiring: false });
-  const [rows, setRows] = useState<Sub[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [tick, setTick] = useState(0);
-  const reload = () => setTick((t) => t + 1);
+  const q = new URLSearchParams();
+  if (filters.search) q.set("search", filters.search);
+  if (filters.trade) q.set("trade", filters.trade);
+  if (filters.status) q.set("status", filters.status);
+  if (filters.expiring) q.set("expiring", "1");
+  const { data, error, reload } = useFetch<Paginated<Sub>>(`/app/subcontractors?${q}`);
+  const rows = data?.data ?? (error ? [] : null);
 
   const [editing, setEditing] = useState<Sub | "new" | null>(null);
   const [form, setForm] = useState<Form>(empty);
   const [formError, setFormError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [assign, setAssign] = useState({ project_id: "", scope: "", agreed_amount: "" });
-
-  useEffect(() => {
-    let live = true;
-    const q = new URLSearchParams();
-    if (filters.search) q.set("search", filters.search);
-    if (filters.trade) q.set("trade", filters.trade);
-    if (filters.status) q.set("status", filters.status);
-    if (filters.expiring) q.set("expiring", "1");
-    crm<Paginated<Sub>>(`/app/subcontractors?${q}`)
-      .then((r) => live && (setRows(r.data), setError(null)))
-      .catch((e) => live && (setError(e), setRows([])));
-    return () => {
-      live = false;
-    };
-  }, [filters, tick]);
 
   const open = async (s: Sub | "new") => {
     setFormError(null);
@@ -159,7 +148,7 @@ export default function SubcontractorsPage() {
       />
 
       {warnings > 0 && !filters.expiring && (
-        <p className="mb-4 flex items-center justify-between rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
+        <p className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800 ring-1 ring-amber-200">
           <span>{warnings} subcontractor{warnings > 1 ? "s have" : " has"} insurance expired or expiring within 30 days.</span>
           <button className="font-medium underline" onClick={() => setFilters({ ...filters, expiring: true })}>Show only these</button>
         </p>
@@ -186,6 +175,7 @@ export default function SubcontractorsPage() {
         {rows === null ? (
           <Spinner />
         ) : (
+          <div className="max-sm:[&_:is(th,td):nth-child(n+2):nth-child(-n+4)]:hidden max-sm:[&_:is(th,td):nth-child(6)]:hidden">
           <Table
             rows={rows}
             onRow={open}
@@ -200,6 +190,7 @@ export default function SubcontractorsPage() {
               ["Status", (s) => <Badge tone={s.status === "active" ? "green" : "gray"}>{s.status}</Badge>],
             ]}
           />
+          </div>
         )}
       </Card>
 
@@ -207,7 +198,7 @@ export default function SubcontractorsPage() {
         <form onSubmit={save} className="space-y-3">
           <fieldset disabled={!manage} className="space-y-3">
             <Field label="Company name" error={fieldError(formError, "company_name")}><Input value={form.company_name} onChange={set("company_name")} required /></Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Contact name"><Input value={form.contact_name} onChange={set("contact_name")} /></Field>
               <Field label="Trade">
                 <Input list="ops-trades" value={form.trade} onChange={set("trade")} placeholder="e.g. Electrical" />
@@ -231,17 +222,17 @@ export default function SubcontractorsPage() {
               {(editing.projects ?? []).length === 0 && <p className="text-sm text-slate-500">Not assigned to any job.</p>}
               <ul className="divide-y divide-slate-100">
                 {(editing.projects ?? []).map((p) => (
-                  <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                    <div>
+                  <li key={p.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                    <div className="min-w-0">
                       <p className="font-medium text-slate-800">{p.name}</p>
                       <p className="text-xs text-slate-500">{p.pivot.scope ?? "No scope"} · {money(p.pivot.agreed_amount)}</p>
                     </div>
-                    {manage && <Button type="button" variant="ghost" onClick={() => unassign(p.id)}>Remove</Button>}
+                    {manage && <Button type="button" variant="danger-ghost" className="px-3 py-1" onClick={() => confirm(`Remove ${editing.company_name} from ${p.name}?`) && unassign(p.id)}>Remove</Button>}
                   </li>
                 ))}
               </ul>
               {manage && (
-                <div className="mt-2 grid grid-cols-[1fr_1fr_7rem_auto] items-end gap-2">
+                <div className="mt-2 grid grid-cols-2 items-end gap-2 sm:grid-cols-[1fr_1fr_7rem_auto]">
                   <Select value={assign.project_id} onChange={(e) => setAssign({ ...assign, project_id: e.target.value })} aria-label="Project">
                     <option value="">Select job…</option>
                     {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -258,7 +249,7 @@ export default function SubcontractorsPage() {
           <ErrorText error={formError && !Object.keys((formError as { errors?: object }).errors ?? {}).length ? formError : null} />
           {manage && (
             <div className="flex justify-between pt-2">
-              {editing !== "new" ? <Button type="button" variant="danger" onClick={remove}>Delete</Button> : <span />}
+              {editing !== "new" ? <Button type="button" variant="danger-ghost" onClick={remove}>Delete</Button> : <span />}
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Close</Button>
                 <Button disabled={saving}>{saving ? "Saving…" : "Save"}</Button>

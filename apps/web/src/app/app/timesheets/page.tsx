@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { crm, can, money } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { crm, can, formatDate, money, toCents } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
-import { addDays, idOrNull, startOfWeek, toCents, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
+import { addDays, idOrNull, startOfWeek, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
 
 type Entry = {
   id: number;
@@ -25,7 +26,8 @@ type Summary = {
   by_user: { id: number; name: string; hours: number; cost: number }[];
 };
 
-const dayLabel = (d: Date) => d.toLocaleDateString([], { weekday: "short", day: "numeric" });
+// Compact grid column header, e.g. "Mon 7" (intentionally shorter than formatDate).
+const dayLabel = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", day: "numeric" });
 
 export default function TimesheetsPage() {
   const { me } = useSession();
@@ -34,11 +36,19 @@ export default function TimesheetsPage() {
   const { users, projects } = useLookups();
   const [week, setWeek] = useState(() => startOfWeek(new Date()));
   const [filters, setFilters] = useState({ user_id: "", project_id: "" });
-  const [entries, setEntries] = useState<Entry[] | null>(null);
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [tick, setTick] = useState(0);
-  const reload = () => setTick((t) => t + 1);
+  const q = new URLSearchParams({ from: ymd(week), to: ymd(addDays(week, 6)) });
+  if (filters.user_id) q.set("user_id", filters.user_id);
+  if (filters.project_id) q.set("project_id", filters.project_id);
+  const list = useFetch<Paginated<Entry>>(`/app/timesheets?${q}`);
+  const sum = useFetch<Summary>(`/app/timesheets/summary?${q}`);
+  const reload = () => {
+    list.reload();
+    sum.reload();
+  };
+  const [actionError, setActionError] = useState<unknown>(null);
+  const error = actionError ?? list.error ?? sum.error;
+  const entries = useMemo(() => list.data?.data ?? (list.error ? [] : null), [list.data, list.error]);
+  const summary = sum.data;
 
   const blank = { work_date: ymd(new Date()), hours: "", project_id: "", user_id: "", hourly_rate: "", notes: "" };
   const [form, setForm] = useState(blank);
@@ -46,24 +56,6 @@ export default function TimesheetsPage() {
   const [saving, setSaving] = useState(false);
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week]);
-
-  useEffect(() => {
-    let live = true;
-    const q = new URLSearchParams({ from: ymd(week), to: ymd(addDays(week, 6)) });
-    if (filters.user_id) q.set("user_id", filters.user_id);
-    if (filters.project_id) q.set("project_id", filters.project_id);
-    Promise.all([crm<Paginated<Entry>>(`/app/timesheets?${q}`), crm<Summary>(`/app/timesheets/summary?${q}`)])
-      .then(([list, sum]) => {
-        if (!live) return;
-        setEntries(list.data);
-        setSummary(sum);
-        setError(null);
-      })
-      .catch((e) => live && (setError(e), setEntries([])));
-    return () => {
-      live = false;
-    };
-  }, [week, filters, tick]);
 
   // Weekly grid: one row per (user, project), hours per day.
   const grid = useMemo(() => {
@@ -103,9 +95,10 @@ export default function TimesheetsPage() {
   const approve = async (entry: Entry, approved: boolean) => {
     try {
       await crm(`/app/timesheets/${entry.id}/approve`, { body: { approved } });
+      setActionError(null);
       reload();
     } catch (e) {
-      setError(e);
+      setActionError(e);
     }
   };
 
@@ -113,9 +106,10 @@ export default function TimesheetsPage() {
     if (!confirm("Delete this entry?")) return;
     try {
       await crm(`/app/timesheets/${entry.id}`, { method: "DELETE" });
+      setActionError(null);
       reload();
     } catch (e) {
-      setError(e);
+      setActionError(e);
     }
   };
 
@@ -130,14 +124,14 @@ export default function TimesheetsPage() {
         <Button variant="secondary" onClick={() => setWeek(addDays(week, -7))} aria-label="Previous week">←</Button>
         <Button variant="secondary" onClick={() => setWeek(startOfWeek(new Date()))}>This week</Button>
         <Button variant="secondary" onClick={() => setWeek(addDays(week, 7))} aria-label="Next week">→</Button>
-        <span className="mx-2 text-sm font-medium text-slate-700">Week of {week.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</span>
+        <span className="text-sm font-medium text-slate-700 sm:mx-2">Week of {formatDate(ymd(week))}</span>
         {isManager && (
-          <Select className="w-44" value={filters.user_id} onChange={(e) => setFilters({ ...filters, user_id: e.target.value })} aria-label="Filter by person">
+          <Select className="w-full sm:w-44" value={filters.user_id} onChange={(e) => setFilters({ ...filters, user_id: e.target.value })} aria-label="Filter by person">
             <option value="">Everyone</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </Select>
         )}
-        <Select className="w-48" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} aria-label="Filter by job">
+        <Select className="w-full sm:w-48" value={filters.project_id} onChange={(e) => setFilters({ ...filters, project_id: e.target.value })} aria-label="Filter by job">
           <option value="">All jobs</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </Select>
@@ -153,7 +147,7 @@ export default function TimesheetsPage() {
 
       {canLog && (
         <Card title="Log hours" className="mb-6">
-          <form onSubmit={submit} className="grid items-end gap-3 md:grid-cols-6">
+          <form onSubmit={submit} className="grid items-end gap-3 sm:grid-cols-2 md:grid-cols-6">
             <Field label="Date" error={fieldError(formError, "work_date")}><Input type="date" value={form.work_date} onChange={(e) => setForm({ ...form, work_date: e.target.value })} required /></Field>
             <Field label="Hours" error={fieldError(formError, "hours")}><Input type="number" min="0.25" max="24" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} required /></Field>
             <Field label="Job" error={fieldError(formError, "project_id")}>
@@ -175,7 +169,7 @@ export default function TimesheetsPage() {
             <Field label="Rate ($/hr)" error={fieldError(formError, "hourly_rate")}><Input type="number" min="0" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} /></Field>
             <Button disabled={saving}>{saving ? "Saving…" : "Add entry"}</Button>
             {isManager && (
-              <div className="md:col-span-6"><Input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
+              <div className="sm:col-span-2 md:col-span-6"><Input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             )}
           </form>
         </Card>
@@ -190,7 +184,7 @@ export default function TimesheetsPage() {
               <p className="py-6 text-center text-sm text-slate-500">No hours logged this week.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[40rem] text-sm">
                   <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium">Person</th>
@@ -202,7 +196,7 @@ export default function TimesheetsPage() {
                   <tbody className="divide-y divide-slate-100">
                     {grid.map((r) => (
                       <tr key={r.key}>
-                        <td className="px-3 py-2 text-slate-800">{r.user}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-slate-800">{r.user}</td>
                         <td className="px-3 py-2 text-slate-600">{r.project}</td>
                         {r.hours.map((h, i) => <td key={i} className="px-2 py-2 text-right tabular-nums">{fmt(h)}</td>)}
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmt(r.total)}</td>
@@ -222,12 +216,12 @@ export default function TimesheetsPage() {
           </Card>
 
           <div className="grid gap-6 lg:grid-cols-3">
-            <Card title="Entries" className="lg:col-span-2">
+            <Card title="Entries" className="min-w-0 lg:col-span-2 max-sm:[&_:is(th,td):nth-child(5)]:hidden max-sm:[&_:is(th,td):nth-child(6)]:hidden">
               <Table
                 rows={entries}
                 empty="No entries this week."
                 columns={[
-                  ["Date", (e) => e.work_date.slice(0, 10)],
+                  ["Date", (e) => <span className="whitespace-nowrap">{formatDate(e.work_date.slice(0, 10))}</span>],
                   ["Person", (e) => e.user?.name ?? "—"],
                   ["Job", (e) => e.project?.name ?? "—"],
                   ["Hours", (e) => fmt(Number(e.hours))],
@@ -237,7 +231,7 @@ export default function TimesheetsPage() {
                   ["", (e) => (
                     <div className="flex justify-end gap-1">
                       {isManager && <Button variant="ghost" className="px-2 py-1" onClick={() => approve(e, !e.approved)}>{e.approved ? "Unapprove" : "Approve"}</Button>}
-                      {canLog && (isManager || !e.approved) && <Button variant="ghost" className="px-2 py-1 text-red-600" onClick={() => remove(e)}>Delete</Button>}
+                      {canLog && (isManager || !e.approved) && <Button variant="danger-ghost" className="px-2 py-1" onClick={() => remove(e)}>Delete</Button>}
                     </div>
                   )],
                 ]}
@@ -247,9 +241,9 @@ export default function TimesheetsPage() {
               {summary?.by_project.length ? (
                 <ul className="divide-y divide-slate-100 text-sm">
                   {summary.by_project.map((p) => (
-                    <li key={p.id ?? 0} className="flex justify-between py-2">
-                      <span className="text-slate-700">{p.name}</span>
-                      <span className="tabular-nums text-slate-900">{fmt(p.hours)} h · {money(p.cost)}</span>
+                    <li key={p.id ?? 0} className="flex justify-between gap-2 py-2">
+                      <span className="min-w-0 truncate text-slate-700">{p.name}</span>
+                      <span className="shrink-0 tabular-nums text-slate-900">{fmt(p.hours)} h · {money(p.cost)}</span>
                     </li>
                   ))}
                 </ul>

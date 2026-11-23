@@ -2,11 +2,12 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { can, crm, money } from "@/lib/api";
+import { can, crm, formatDate, money, toCents, toDollars } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
 import {
-  LEAD_SOURCES, LEAD_STATUSES, Pager, idOrNull, label, orNull, toCents, toDollars, tone, useDebounced, useFetch, useUsers,
+  LEAD_SOURCES, LEAD_STATUSES, MobileList, Pager, idOrNull, label, orNull, tone, useDebounced, useUsers,
   type Lead, type Page,
 } from "../projects/_crm/shared";
 
@@ -28,7 +29,7 @@ function LeadForm({ lead, onSaved, onCancel }: { lead: Lead | null; onSaved: () 
     try {
       const body = {
         name: f.name, email: orNull(f.email), phone: orNull(f.phone), company: orNull(f.company), service: orNull(f.service),
-        source: f.source, status: f.status, value: toCents(f.value), address: orNull(f.address), message: orNull(f.message),
+        source: f.source, status: f.status, value: toCents(f.value) ?? 0, address: orNull(f.address), message: orNull(f.message),
         assigned_to: idOrNull(f.assigned_to),
       };
       await crm(lead ? `/app/leads/${lead.id}` : "/app/leads", { method: lead ? "PUT" : "POST", body });
@@ -130,13 +131,25 @@ function LeadsPage() {
     }
   }
 
+  const actions = (l: Lead) => (
+    <>
+      {l.customer_id ? (
+        can(me, "customers.view") && <Button variant="ghost" className="px-2 py-1" onClick={() => router.push(`/app/customers/${l.customer_id}`)}>Customer</Button>
+      ) : (
+        l.status !== "lost" && <Button className="px-2 py-1" onClick={() => setConverting(l)}>Convert</Button>
+      )}
+      <Button variant="secondary" className="px-2 py-1" onClick={() => setEditing(l)}>Edit</Button>
+      <Button variant="danger-ghost" className="px-2 py-1" onClick={() => remove(l)} aria-label={`Delete lead ${l.name}`}>Delete</Button>
+    </>
+  );
+
   return (
     <div>
       <PageHeader title="Leads" subtitle="Enquiries from your website, referrals and calls." actions={manage && <Button onClick={() => setEditing("new")}>+ New lead</Button>} />
       <Card>
         <div className="mb-4 flex flex-wrap gap-3">
-          <Input placeholder="Search name, email, phone, service…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="max-w-xs" />
-          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="max-w-[12rem]">
+          <Input placeholder="Search name, email, phone, service…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="w-full sm:max-w-xs" />
+          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="w-full sm:max-w-[12rem]">
             <option value="">All statuses</option>
             {LEAD_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
           </Select>
@@ -144,34 +157,46 @@ function LeadsPage() {
         <ErrorText error={error || actionError} />
         {!data ? !error && <Spinner /> : (
           <>
-            <Table
+            <MobileList
               rows={data.data}
               empty="No leads match."
-              columns={[
-                ["Name", (l) => (
-                  <div>
-                    <p className="font-medium text-slate-900">{l.name}</p>
-                    <p className="text-xs text-slate-500">{[l.company, l.email, l.phone].filter(Boolean).join(" · ")}</p>
+              render={(l) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{l.name}</p>
+                      <p className="truncate text-xs text-slate-500">{[l.service, l.company, l.phone].filter(Boolean).join(" · ") || "—"}</p>
+                    </div>
+                    <Badge tone={tone(l.status)}>{label(l.status)}</Badge>
                   </div>
-                )],
-                ["Service", (l) => l.service || "—"],
-                ["Source", (l) => label(l.source)],
-                ["Value", (l) => money(l.value)],
-                ["Status", (l) => <Badge tone={tone(l.status)}>{label(l.status)}</Badge>],
-                ["Assigned", (l) => l.assignee?.name ?? "—"],
-                ["", (l) => manage && (
-                  <div className="flex justify-end gap-1">
-                    {l.customer_id ? (
-                      can(me, "customers.view") && <Button variant="ghost" className="px-2 py-1" onClick={() => router.push(`/app/customers/${l.customer_id}`)}>Customer</Button>
-                    ) : (
-                      l.status !== "lost" && <Button variant="secondary" className="px-2 py-1" onClick={() => setConverting(l)}>Convert</Button>
-                    )}
-                    <Button variant="ghost" className="px-2 py-1" onClick={() => setEditing(l)}>Edit</Button>
-                    <Button variant="ghost" className="px-2 py-1 text-red-600" onClick={() => remove(l)}>Delete</Button>
+                  <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>{money(l.value)} · {label(l.source)} · {formatDate(l.created_at)}</span>
                   </div>
-                )],
-              ]}
+                  {manage && <div className="flex flex-wrap gap-1">{actions(l)}</div>}
+                </div>
+              )}
             />
+            <div className="hidden sm:block">
+              <Table
+                rows={data.data}
+                empty="No leads match."
+                columns={[
+                  ["Name", (l) => (
+                    <div className="min-w-[10rem]">
+                      <p className="font-medium text-slate-900">{l.name}</p>
+                      <p className="text-xs text-slate-500">{[l.company, l.email, l.phone].filter(Boolean).join(" · ")}</p>
+                    </div>
+                  )],
+                  ["Service", (l) => l.service || "—"],
+                  ["Source", (l) => label(l.source)],
+                  ["Value", (l) => money(l.value)],
+                  ["Status", (l) => <Badge tone={tone(l.status)}>{label(l.status)}</Badge>],
+                  ["Received", (l) => <span className="whitespace-nowrap">{formatDate(l.created_at)}</span>],
+                  ["Assigned", (l) => l.assignee?.name ?? "—"],
+                  ["", (l) => manage && <div className="flex justify-end gap-1 whitespace-nowrap">{actions(l)}</div>],
+                ]}
+              />
+            </div>
             <Pager page={data.current_page} last={data.last_page} onPage={setPage} />
           </>
         )}

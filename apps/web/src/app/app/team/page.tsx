@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, can, crm } from "@/lib/api";
+import { ApiError, can, crm, formatDate } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, cx, fieldError } from "@/components/ui";
 
@@ -10,11 +10,16 @@ type Member = { id: number; name: string; email: string; phone: string | null; s
 type Group = { module: string; name: string; permissions: string[] };
 type Users = { data: Member[]; max_users: number | null; active_users: number };
 
+const isFull = (perms: string[] | undefined) => !!perms?.includes("*");
+/** Mirrors the API's escalation rules: only full-access users can grant '*' or perms they don't hold. */
+const canGrant = (mine: string[], perms: string[]) => isFull(mine) || (!isFull(perms) && perms.every((p) => mine.includes(p)));
+
 const permLabel = (p: string) => (p.endsWith(".view") ? "View" : p.endsWith(".manage") ? "Manage" : p);
 
 export default function TeamPage() {
   const { me, refresh } = useSession();
   const manage = can(me, "team.manage");
+  const myPerms = me?.permissions ?? [];
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [users, setUsers] = useState<Users | null>(null);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -46,9 +51,9 @@ export default function TeamPage() {
   return (
     <div>
       <PageHeader title="Team & Roles" subtitle="Invite staff and control what each role can see and do." />
-      <div className="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium sm:w-fit">
+      <div role="tablist" className="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm font-medium sm:w-fit">
         {(["users", "roles"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={cx("rounded-md px-4 py-1.5", tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900")}>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={cx("shrink-0 whitespace-nowrap rounded-md px-4 py-1.5", tab === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900")}>
             {t === "users" ? "Team members" : "Roles"}
           </button>
         ))}
@@ -57,20 +62,24 @@ export default function TeamPage() {
       {!users ? (
         error ? null : <Spinner />
       ) : tab === "users" ? (
-        <UsersTab users={users} roles={roles} manage={manage} meId={me?.id} onChange={reload} />
+        <UsersTab users={users} roles={roles} manage={manage} meId={me?.id} myPerms={myPerms} onChange={reload} />
       ) : (
-        <RolesTab roles={roles} groups={groups} manage={manage} onChange={afterRoleChange} />
+        <RolesTab roles={roles} groups={groups} manage={manage} myPerms={myPerms} meRoleId={me?.role?.id} onChange={afterRoleChange} />
       )}
     </div>
   );
 }
 
-function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; roles: Role[]; manage: boolean; meId?: number; onChange: () => void }) {
+function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Users; roles: Role[]; manage: boolean; meId?: number; myPerms: string[]; onChange: () => void }) {
   const [editing, setEditing] = useState<Member | "new" | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", password: "", role_id: "" });
   const [err, setErr] = useState<unknown>(null);
   const [rowErr, setRowErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const roleById = new Map(roles.map((r) => [r.id, r]));
+  const canManage = (m: Member) => manage && (isFull(myPerms) || !isFull(roleById.get(m.role_id ?? -1)?.permissions));
+  const assignable = roles.filter((r) => canGrant(myPerms, r.permissions));
+  const editingSelf = editing !== null && editing !== "new" && editing.id === meId;
   const full = users.max_users !== null && users.active_users >= users.max_users;
 
   const open = (m: Member | "new") => {
@@ -78,7 +87,7 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
     setEditing(m);
     setForm(
       m === "new"
-        ? { name: "", email: "", phone: "", password: "", role_id: String(roles.find((r) => !r.is_system)?.id ?? "") }
+        ? { name: "", email: "", phone: "", password: "", role_id: String(assignable.find((r) => !r.is_system)?.id ?? "") }
         : { name: m.name, email: m.email, phone: m.phone ?? "", password: "", role_id: String(m.role_id ?? "") },
     );
   };
@@ -88,7 +97,9 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
     setBusy(true);
     setErr(null);
     try {
-      const body = { ...form, role_id: Number(form.role_id), phone: form.phone || null };
+      const { role_id, ...rest } = form;
+      // Your own role can't be changed here; omit it so the API doesn't reject the save.
+      const body = editingSelf ? { ...rest, phone: form.phone || null } : { ...rest, role_id: Number(role_id), phone: form.phone || null };
       if (editing === "new") await crm("/app/team/users", { body });
       else if (editing) await crm(`/app/team/users/${editing.id}`, { method: "PUT", body });
       setEditing(null);
@@ -129,9 +140,9 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
           ["Name", (m) => (<div><p className="font-medium text-slate-900">{m.name}{m.id === meId && <span className="ml-1 text-xs text-slate-400">(you)</span>}</p><p className="text-xs text-slate-500">{m.email}</p></div>)],
           ["Role", (m) => m.role?.name ?? "—"],
           ["Status", (m) => <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
-          ["Last login", (m) => (m.last_login_at ? new Date(m.last_login_at).toLocaleDateString() : "Never")],
+          ["Last login", (m) => (m.last_login_at ? formatDate(m.last_login_at) : "Never")],
           ["", (m) =>
-            manage && (
+            canManage(m) && (
               <div className="flex justify-end gap-1">
                 <Button variant="ghost" className="px-2 py-1" onClick={() => open(m)}>Edit</Button>
                 {m.id !== meId && (
@@ -139,7 +150,7 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
                     <Button variant="ghost" className="px-2 py-1" onClick={() => act(m, m.status === "active" ? "disable" : "enable")}>
                       {m.status === "active" ? "Disable" : "Enable"}
                     </Button>
-                    <Button variant="ghost" className="px-2 py-1 text-red-600" onClick={() => act(m, "delete")}>Delete</Button>
+                    <Button variant="danger-ghost" className="px-2 py-1" onClick={() => act(m, "delete")}>Delete</Button>
                   </>
                 )}
               </div>
@@ -152,10 +163,12 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
           <Field label="Name" error={fieldError(err, "name")}><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Email" error={fieldError(err, "email")}><Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
           <Field label="Phone" error={fieldError(err, "phone")}><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
-          <Field label="Role" error={fieldError(err, "role_id")}>
-            <Select required value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
+          <Field label={editingSelf ? "Role (you can't change your own role)" : "Role"} error={fieldError(err, "role_id")}>
+            <Select required disabled={editingSelf} value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
               <option value="">Choose a role…</option>
-              {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              {roles
+                .filter((r) => assignable.includes(r) || String(r.id) === form.role_id)
+                .map((r) => <option key={r.id} value={r.id} disabled={!assignable.includes(r)}>{r.name}</option>)}
             </Select>
           </Field>
           <Field label={editing === "new" ? "Password" : "New password (leave blank to keep)"} error={fieldError(err, "password")}>
@@ -171,14 +184,17 @@ function UsersTab({ users, roles, manage, meId, onChange }: { users: Users; role
   );
 }
 
-function RolesTab({ roles, groups, manage, onChange }: { roles: Role[]; groups: Group[]; manage: boolean; onChange: () => void }) {
+function RolesTab({ roles, groups, manage, myPerms, meRoleId, onChange }: { roles: Role[]; groups: Group[]; manage: boolean; myPerms: string[]; meRoleId?: number; onChange: () => void }) {
   const [editing, setEditing] = useState<Role | "new" | null>(null);
   const [name, setName] = useState("");
   const [perms, setPerms] = useState<string[]>([]);
   const [err, setErr] = useState<unknown>(null);
   const [rowErr, setRowErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const locked = editing !== null && editing !== "new" && editing.is_system;
+  const editable = (r: Role) => manage && !r.is_system && (isFull(myPerms) || (r.id !== meRoleId && !isFull(r.permissions)));
+  const viewing = editing !== null && editing !== "new" ? editing : null;
+  const locked = viewing !== null && !editable(viewing);
+  const grantable = (p: string) => isFull(myPerms) || myPerms.includes(p);
 
   const open = (r: Role | "new") => {
     setErr(null);
@@ -231,33 +247,38 @@ function RolesTab({ roles, groups, manage, onChange }: { roles: Role[]; groups: 
           ["Members", (r) => r.users_count],
           ["", (r) => (
             <div className="flex justify-end gap-1">
-              <Button variant="ghost" className="px-2 py-1" onClick={() => open(r)}>{manage && !r.is_system ? "Edit" : "View"}</Button>
-              {manage && !r.is_system && (
-                <Button variant="ghost" className="px-2 py-1 text-red-600" disabled={r.users_count > 0} title={r.users_count > 0 ? "Reassign its members first" : undefined} onClick={() => remove(r)}>Delete</Button>
+              <Button variant="ghost" className="px-2 py-1" onClick={() => open(r)}>{editable(r) ? "Edit" : "View"}</Button>
+              {editable(r) && (
+                <Button variant="danger-ghost" className="px-2 py-1" disabled={r.users_count > 0} title={r.users_count > 0 ? "Reassign its members first" : undefined} onClick={() => remove(r)}>Delete</Button>
               )}
             </div>
           )],
         ]}
       />
-      <Modal open={editing !== null} title={editing === "new" ? "New role" : locked ? "Owner role" : manage ? "Edit role" : "Role"} onClose={() => setEditing(null)}>
+      <Modal open={editing !== null} title={editing === "new" ? "New role" : locked ? "Role" : "Edit role"} onClose={() => setEditing(null)}>
         <form onSubmit={save} className="space-y-4">
           <ErrorText error={err instanceof ApiError && Object.keys(err.errors).length ? fieldError(err, "permissions") ?? null : err} />
-          {locked && <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">The owner role always has full access and can&apos;t be changed.</p>}
+          {locked && viewing?.is_system && <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">The owner role always has full access and can&apos;t be changed.</p>}
+          {locked && !viewing?.is_system && manage && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {viewing?.id === meRoleId ? "You can't edit your own role." : "Only a user with full access can change this role."}
+            </p>
+          )}
           <Field label="Role name" error={fieldError(err, "name")}>
-            <Input required disabled={locked || !manage} value={name} onChange={(e) => setName(e.target.value)} />
+            <Input required disabled={locked} value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          {!locked && (
+          {!(locked && isFull(viewing?.permissions)) && (
             <div className="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
               {groups.map((g) => (
-                <div key={g.module} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div key={g.module} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                    <input type="checkbox" disabled={!manage} checked={g.permissions.every((p) => perms.includes(p))} onChange={() => toggleGroup(g)} className="accent-brand-600" />
+                    <input type="checkbox" disabled={locked || !g.permissions.every(grantable)} checked={g.permissions.every((p) => perms.includes(p))} onChange={() => toggleGroup(g)} className="accent-brand-600" />
                     {g.name}
                   </label>
                   <div className="flex gap-3">
                     {g.permissions.map((p) => (
                       <label key={p} className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <input type="checkbox" disabled={!manage} checked={perms.includes(p)} onChange={() => toggle(p)} className="accent-brand-600" />
+                        <input type="checkbox" disabled={locked || !grantable(p)} checked={perms.includes(p)} onChange={() => toggle(p)} className="accent-brand-600" />
                         {permLabel(p)}
                       </label>
                     ))}
@@ -267,8 +288,8 @@ function RolesTab({ roles, groups, manage, onChange }: { roles: Role[]; groups: 
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>{locked || !manage ? "Close" : "Cancel"}</Button>
-            {manage && !locked && <Button disabled={busy}>{busy ? "Saving…" : "Save role"}</Button>}
+            <Button type="button" variant="secondary" onClick={() => setEditing(null)}>{locked ? "Close" : "Cancel"}</Button>
+            {!locked && <Button disabled={busy}>{busy ? "Saving…" : "Save role"}</Button>}
           </div>
         </form>
       </Modal>

@@ -3,6 +3,8 @@
 namespace App\Domains\Crm\Http;
 
 use App\Models\Customer;
+use App\Models\Estimate;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
 
 class CustomerController
@@ -53,6 +55,11 @@ class CustomerController
     public function destroy(int $customerId)
     {
         $customer = Customer::findOrFail($customerId);
+        if (Invoice::where('customer_id', $customer->id)->exists() || Estimate::where('customer_id', $customer->id)->exists()) {
+            return response()->json([
+                'message' => 'This customer has estimates or invoices. Delete or reassign them first — customers with billing history cannot be deleted.',
+            ], 422);
+        }
         $customer->delete();
 
         return response()->noContent();

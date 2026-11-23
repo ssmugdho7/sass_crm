@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- previews of user-uploaded / external images. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, crm, money, tokens } from "@/lib/api";
+import { ApiError, crm, money, toCents, tokens } from "@/lib/api";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, Select, Spinner, Textarea, fieldError } from "@/components/ui";
 
 /** Multipart upload to /app/website/upload (crm() only sends JSON). */
@@ -47,7 +47,7 @@ export function ImageInput({ value, onChange, label, error }: { value: string | 
         </div>
         <div className="min-w-0 flex-1 space-y-2">
           <Input value={value ?? ""} placeholder="https://… or upload" onChange={(e) => onChange(e.target.value || null)} />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button type="button" variant="secondary" disabled={busy} onClick={() => ref.current?.click()}>{busy ? "Uploading…" : "Upload"}</Button>
             {value && <Button type="button" variant="ghost" onClick={() => onChange(null)}>Remove</Button>}
           </div>
@@ -85,11 +85,11 @@ export function ImagesInput({ value, onChange }: { value: string[]; onChange: (v
           <div key={u + i} className="group relative aspect-square overflow-hidden rounded-lg bg-slate-100">
             <img src={u} alt="" className="h-full w-full object-cover" />
             <button type="button" aria-label="Remove photo" onClick={() => onChange(value.filter((_, j) => j !== i))}
-              className="absolute right-1 top-1 rounded bg-slate-900/70 px-1.5 text-xs text-white opacity-0 group-hover:opacity-100 focus:opacity-100">✕</button>
+              className="absolute right-1 top-1 rounded bg-slate-900/70 px-1.5 text-xs text-white opacity-100 group-hover:opacity-100 focus:opacity-100 sm:opacity-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">✕</button>
           </div>
         ))}
         <button type="button" disabled={busy} onClick={() => ref.current?.click()}
-          className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-brand-500 hover:text-brand-600">
+          className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-slate-300 text-xs text-slate-500 hover:border-brand-500 hover:text-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
           {busy ? "…" : "+ Add"}
         </button>
       </div>
@@ -199,7 +199,7 @@ export function CollectionEditor({ collection, title, fields, summary, empty, on
   const set = (k: string, v: unknown) => setEditing((cur) => ({ ...cur, [k]: v }));
 
   return (
-    <Card title={title} actions={<div className="flex gap-2">{extraActions}<Button onClick={() => { setFormError(null); setEditing(blank()); }}>+ Add</Button></div>}>
+    <Card title={title} actions={<div className="flex flex-wrap justify-end gap-2">{extraActions}<Button onClick={() => { setFormError(null); setEditing(blank()); }}>+ Add</Button></div>}>
       <ErrorText error={error} />
       {!rows ? (
         <Spinner />
@@ -210,27 +210,29 @@ export function CollectionEditor({ collection, title, fields, summary, empty, on
           {rows.map((r, i) => {
             const s = summary(r);
             return (
-              <li key={r.id} className="flex items-center gap-3 py-3">
+              <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:flex-nowrap">
                 <div className="flex flex-col">
-                  <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} className="px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30">▲</button>
-                  <button aria-label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)} className="px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30">▼</button>
+                  <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▲</button>
+                  <button aria-label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▼</button>
                 </div>
                 {s.image !== undefined && (
                   <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-100">
                     {s.image && <img src={s.image} alt="" className="h-full w-full object-cover" />}
                   </div>
                 )}
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 basis-32">
                   <p className="truncate font-medium text-slate-900">{s.primary}</p>
                   {s.secondary && <p className="truncate text-sm text-slate-500">{s.secondary}</p>}
                 </div>
                 {publishable && (
-                  <button onClick={() => togglePublish(r)} title="Toggle visibility on the website">
+                  <button type="button" onClick={() => togglePublish(r)} title="Toggle visibility on the website" aria-label={`${r.is_published ? "Unpublish" : "Publish"} ${s.primary}`} className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
                     <Badge tone={r.is_published ? "green" : "gray"}>{r.is_published ? "Published" : "Draft"}</Badge>
                   </button>
                 )}
-                <Button variant="ghost" onClick={() => { setFormError(null); setEditing({ ...r }); }}>Edit</Button>
-                <Button variant="ghost" className="text-red-600" onClick={() => remove(r)}>Delete</Button>
+                <div className="ml-auto flex shrink-0 gap-1">
+                  <Button variant="ghost" className="px-3" onClick={() => { setFormError(null); setEditing({ ...r }); }}>Edit</Button>
+                  <Button variant="ghost" className="px-3 text-red-600" onClick={() => remove(r)}>Delete</Button>
+                </div>
               </li>
             );
           })}
@@ -253,9 +255,9 @@ export function CollectionEditor({ collection, title, fields, summary, empty, on
                 case "money":
                   return (
                     <Field key={f.key} label={f.label} error={err}>
-                      <Input type="number" min={0} step="1" placeholder="Leave blank to hide"
+                      <Input type="number" min={0} step="0.01" inputMode="decimal" placeholder="Leave blank to hide"
                         value={v == null ? "" : Number(v) / 100}
-                        onChange={(e) => set(f.key, e.target.value === "" ? null : Math.round(Number(e.target.value) * 100))} />
+                        onChange={(e) => set(f.key, toCents(e.target.value))} />
                     </Field>
                   );
                 case "bool":

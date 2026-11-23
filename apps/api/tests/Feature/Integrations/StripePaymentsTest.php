@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Integrations;
 
-use App\Domains\Integrations\IntegrationsServiceProvider;
 use App\Domains\Integrations\Services\StripeSignature;
 use App\Models\Customer;
 use App\Models\Invoice;
@@ -25,7 +24,6 @@ class StripePaymentsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->app->register(IntegrationsServiceProvider::class);
         $this->tenant = Tenant::where('slug', 'demo-builders')->firstOrFail();
     }
 
@@ -67,6 +65,22 @@ class StripePaymentsTest extends TestCase
                 && (int) $r['metadata[invoice_id]'] === $invoice->id
                 && str_ends_with($r['success_url'], "/i/invoice/{$invoice->public_token}?paid=1");
         });
+    }
+
+    public function test_checkout_returns_404_when_tenant_not_accessible(): void
+    {
+        $this->configure(['secret_key' => 'sk_test_123']);
+        $invoice = $this->invoice();
+        Http::fake();
+
+        $this->tenant->forceFill(['status' => 'suspended'])->save();
+        $this->postJson("/api/public/invoices/{$invoice->public_token}/checkout")->assertNotFound();
+
+        $this->tenant->forceFill(['status' => 'trial', 'trial_ends_at' => now()->subDay()])->save();
+        $this->postJson("/api/public/invoices/{$invoice->public_token}/checkout")->assertNotFound();
+
+        $this->postJson('/api/public/invoices/tok_unknown/checkout')->assertNotFound();
+        Http::assertNothingSent();
     }
 
     public function test_checkout_refuses_when_not_configured_or_nothing_due(): void

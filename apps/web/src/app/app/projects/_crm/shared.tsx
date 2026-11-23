@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { crm } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { formatDate } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
+
+/** Kept for older imports; prefer `@/lib/useFetch` directly. */
+export { useFetch };
 
 export type Ref = { id: number; name: string } | null;
 export type Page<T> = { data: T[]; current_page: number; last_page: number; total: number };
@@ -40,37 +44,15 @@ const TONES: Record<string, string> = {
 export const tone = (s: string) => TONES[s] ?? "gray";
 export const label = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
-/** Dollars string (form input) ⇄ integer cents. */
-export const toCents = (dollars: string) => Math.max(0, Math.round((parseFloat(dollars) || 0) * 100));
-export const toDollars = (cents: number | null | undefined) => (cents ? (cents / 100).toFixed(2) : "");
 export const idOrNull = (v: string) => (v ? Number(v) : null);
 export const orNull = (v: string) => (v.trim() ? v.trim() : null);
 
+/** "Mar 3, 2026 → Jun 1, 2026" for a start/due pair; "—" when both are empty. */
+export const dateRange = (start: string | null | undefined, end: string | null | undefined) =>
+  start || end ? `${start ? formatDate(start) : "?"} → ${end ? formatDate(end) : "?"}` : "—";
+
 export const isOverdue = (t: Pick<Task, "status" | "due_date">) =>
   t.status !== "done" && !!t.due_date && t.due_date < new Date().toISOString().slice(0, 10);
-
-/** Load a GET endpoint; returns data, error and a reload function. Pass null to skip. */
-export function useFetch<T>(path: string | null) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [tick, setTick] = useState(0);
-  const reload = useCallback(() => setTick((t) => t + 1), []);
-  useEffect(() => {
-    if (!path) return;
-    let live = true;
-    crm<T>(path)
-      .then((r) => {
-        if (!live) return;
-        setData(r);
-        setError(null);
-      })
-      .catch((e) => live && setError(e));
-    return () => {
-      live = false;
-    };
-  }, [path, tick]);
-  return { data, error, reload, setData };
-}
 
 /** Tenant users for assignee/manager pickers. */
 export function useUsers() {
@@ -95,5 +77,28 @@ export function Pager({ page, last, onPage }: { page: number; last: number; onPa
       <span>Page {page} of {last}</span>
       <button className="rounded px-2 py-1 hover:bg-slate-100 disabled:opacity-40" disabled={page >= last} onClick={() => onPage(page + 1)}>Next →</button>
     </div>
+  );
+}
+
+/**
+ * Stacked-card list for phones (below `sm`); pair with a table wrapped in `hidden sm:block`
+ * so wide tables never push the page width at 390px.
+ */
+export function MobileList<T extends { id: number }>({ rows, empty = "Nothing here yet.", onRow, render }: {
+  rows: T[]; empty?: string; onRow?: (r: T) => void; render: (r: T) => React.ReactNode;
+}) {
+  if (!rows.length) return <p className="py-10 text-center text-sm text-slate-500 sm:hidden">{empty}</p>;
+  return (
+    <ul className="divide-y divide-slate-100 sm:hidden">
+      {rows.map((r) => (
+        <li
+          key={r.id}
+          onClick={onRow ? () => onRow(r) : undefined}
+          className={`min-w-0 py-3 text-sm ${onRow ? "cursor-pointer active:bg-slate-50" : ""}`}
+        >
+          {render(r)}
+        </li>
+      ))}
+    </ul>
   );
 }

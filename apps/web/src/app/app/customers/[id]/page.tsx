@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { can, crm, money } from "@/lib/api";
+import { can, crm, formatDate, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Link, Modal, PageHeader, Spinner, Stat, Table } from "@/components/ui";
-import { label, tone, useFetch, type Customer, type Project } from "../../projects/_crm/shared";
+import { label, tone, type Customer, type Project } from "../../projects/_crm/shared";
 import { ProjectForm } from "../../projects/_crm/forms";
 import { CustomerForm } from "../CustomerForm";
 
@@ -28,7 +29,7 @@ export default function CustomerPage() {
   const [actionError, setActionError] = useState<unknown>(null);
 
   async function remove() {
-    if (!data || !confirm(`Delete ${data.customer.name}? Their invoices and estimates are deleted too.`)) return;
+    if (!data || !confirm(`Delete customer “${data.customer.name}”? This cannot be undone.`)) return;
     try {
       await crm(`/app/customers/${id}`, { method: "DELETE" });
       router.push("/app/customers");
@@ -50,7 +51,7 @@ export default function CustomerPage() {
         actions={manage && (
           <>
             <Button variant="secondary" onClick={() => setEditing(true)}>Edit</Button>
-            <Button variant="danger" onClick={remove}>Delete</Button>
+            <Button variant="danger-ghost" onClick={remove}>Delete</Button>
           </>
         )}
       />
@@ -91,7 +92,7 @@ export default function CustomerPage() {
             onRow={can(me, "invoices.view") ? (i) => router.push(`/app/invoices/${i.id}`) : undefined}
             columns={[
               ["Number", (i) => i.number],
-              ["Issued", (i) => i.issue_date],
+              ["Issued", (i) => <span className="whitespace-nowrap">{formatDate(i.issue_date)}</span>],
               ["Status", (i) => <Badge tone={tone(i.status)}>{label(i.status)}</Badge>],
               ["Total", (i) => money(i.total)],
               ["Balance", (i) => money(Math.max(0, i.total - i.amount_paid))],

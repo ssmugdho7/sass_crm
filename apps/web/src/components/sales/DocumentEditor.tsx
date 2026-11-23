@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { crm, money } from "@/lib/api";
+import { crm, money, toCents, toDollars } from "@/lib/api";
 import { Button, Card, ErrorText, Field, Input, Select, Textarea, fieldError } from "@/components/ui";
-import { calcTotals, toCents, toDollars, type DocKind, type SalesDoc } from "./types";
+import { calcTotals, type DocKind, type SalesDoc } from "./types";
 
 type Option = { id: number; name: string; customer_id?: number | null };
 type Row = { key: number; description: string; quantity: string; price: string };
@@ -69,7 +69,7 @@ export function DocumentEditor({ kind, initial, onSubmit, submitLabel, disabled 
     return list;
   }, [projects, customerId, initial]);
 
-  const items = rows.map((r) => ({ description: r.description, quantity: Number(r.quantity) || 0, unit_price: toCents(r.price) }));
+  const items = rows.map((r) => ({ description: r.description, quantity: Number(r.quantity) || 0, unit_price: toCents(r.price) ?? 0 }));
   const totals = calcTotals(items, Number(taxRate));
   const update = (key: number, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 

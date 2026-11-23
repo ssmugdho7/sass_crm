@@ -39,6 +39,21 @@ const Icon = ({ name }: { name: string | null }) => (
   </svg>
 );
 
+/** Shown for portfolio items without photos: theme-colored gradient, icon and category. */
+export const ProjectPlaceholder = ({ category }: { category: string | null }) => (
+  <div aria-hidden className="relative flex h-full min-h-48 w-full flex-col items-center justify-center gap-3 overflow-hidden bg-[linear-gradient(135deg,var(--accent),#0f172a_85%)] pb-20 text-white">
+    <div className="absolute inset-0 opacity-15 [background-image:repeating-linear-gradient(45deg,#fff_0,#fff_1px,transparent_1px,transparent_14px)]" />
+    <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur">
+      <Icon name={iconFor(category)} />
+    </span>
+    {category && <span className="relative text-xs font-semibold uppercase tracking-widest text-white/80">{category}</span>}
+  </div>
+);
+const iconFor = (category: string | null) => {
+  const c = (category ?? "").toLowerCase();
+  return (["kitchen", "bath", "roof", "commercial", "addition"] as const).find((k) => c.includes(k)) ?? "home";
+};
+
 export function Hero({ site, base }: { site: PublicSite; base: string }) {
   const s = site.settings;
   const stats = [
@@ -131,7 +146,7 @@ export function Portfolio({ site, base }: { site: PublicSite; base: string }) {
               {p.cover_url || p.images?.[0] ? (
                 <img src={p.cover_url || p.images![0]} alt={p.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900 text-slate-400">No photo</div>
+                <ProjectPlaceholder category={p.category} />
               )}
             </div>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-5 pt-16">

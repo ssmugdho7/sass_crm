@@ -2,6 +2,7 @@
 
 namespace App\Domains\Account\Http;
 
+use App\Domains\Account\Support\TeamGuard;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Tenancy\CurrentTenant;
@@ -32,6 +33,7 @@ class TeamController
             'password' => 'required|string|min:8',
             'role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where('tenant_id', CurrentTenant::id())],
         ]);
+        TeamGuard::ensureCanAssignRole($request->user(), $this->findRole($data['role_id']));
         $this->ensureSeatAvailable();
         $user = User::create($data + ['tenant_id' => CurrentTenant::id(), 'status' => 'active']);
 
@@ -41,6 +43,8 @@ class TeamController
     public function update(Request $request, int $user)
     {
         $model = $this->find($user);
+        $actor = $request->user();
+        TeamGuard::ensureCanManageUser($actor, $model);
         $data = $request->validate([
             'name' => 'sometimes|required|string|max:120',
             'email' => ['sometimes', 'required', 'email', 'max:190', Rule::unique('users', 'email')->ignore($model->id)],
@@ -51,10 +55,20 @@ class TeamController
         if (empty($data['password'])) {
             unset($data['password']);
         }
-        if (isset($data['role_id']) && (int) $data['role_id'] !== $model->role_id && $this->isOwner($model)) {
-            $this->ensureNotLastOwner($model, 'change the role of');
+        $roleChanged = isset($data['role_id']) && (int) $data['role_id'] !== $model->role_id;
+        if ($roleChanged) {
+            abort_if($model->id === $actor->id, 403, 'You cannot change your own role.');
+            TeamGuard::ensureCanAssignRole($actor, $this->findRole($data['role_id']));
+            if ($this->isOwner($model)) {
+                $this->ensureNotLastOwner($model, 'change the role of');
+            }
         }
+        $credentialsChanged = isset($data['password'])
+            || (isset($data['email']) && strcasecmp($data['email'], $model->email) !== 0);
         $model->update($data);
+        if ($credentialsChanged && $model->id !== $actor->id) {
+            $model->tokens()->delete();
+        }
 
         return $this->present($model->load('role:id,name,slug'));
     }
@@ -63,6 +77,7 @@ class TeamController
     {
         $model = $this->find($user);
         abort_if($model->id === $request->user()->id, 422, 'You cannot disable your own account.');
+        TeamGuard::ensureCanManageUser($request->user(), $model);
         $this->ensureNotLastOwner($model, 'disable');
         $model->update(['status' => 'disabled']);
         $model->tokens()->delete();
@@ -70,9 +85,10 @@ class TeamController
         return $this->present($model->load('role:id,name,slug'));
     }
 
-    public function enable(int $user)
+    public function enable(Request $request, int $user)
     {
         $model = $this->find($user);
+        TeamGuard::ensureCanManageUser($request->user(), $model);
         if ($model->status !== 'active') {
             $this->ensureSeatAvailable();
             $model->update(['status' => 'active']);
@@ -85,6 +101,7 @@ class TeamController
     {
         $model = $this->find($user);
         abort_if($model->id === $request->user()->id, 422, 'You cannot delete your own account.');
+        TeamGuard::ensureCanManageUser($request->user(), $model);
         $this->ensureNotLastOwner($model, 'delete');
         $model->tokens()->delete();
         $model->delete();
@@ -95,6 +112,11 @@ class TeamController
     private function find(int $id): User
     {
         return User::where('tenant_id', CurrentTenant::id())->findOrFail($id);
+    }
+
+    private function findRole(int $id): Role
+    {
+        return Role::where('tenant_id', CurrentTenant::id())->findOrFail($id);
     }
 
     private function present(User $u): array

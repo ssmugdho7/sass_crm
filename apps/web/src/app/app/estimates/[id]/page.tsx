@@ -69,7 +69,7 @@ export default function EstimatePage() {
                 <Button disabled={busy} onClick={convert}>Convert to invoice</Button>
               )
             )}
-            <Button variant="ghost" className="ml-auto text-red-600" disabled={busy} onClick={remove}>Delete</Button>
+            <Button variant="danger-ghost" className="ml-auto" disabled={busy} onClick={remove}>Delete</Button>
           </>
         )}
       </div>

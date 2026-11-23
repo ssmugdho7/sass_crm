@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { money, platform } from "@/lib/api";
+import { money, platform, toCents, toDollars } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Spinner, Table, Textarea, fieldError } from "@/components/ui";
-import { toCents, toDollars, useLoad, type Plan } from "../_shared";
+import { type Plan } from "../_shared";
 
 type Mod = { key: string; name: string; is_core: boolean };
 
 export default function PlansPage() {
-  const { data, error, reload } = useLoad<Plan[]>("/platform/plans");
-  const { data: modules } = useLoad<Mod[]>("/platform/modules");
+  const { data, error, reload } = useFetch<Plan[]>("/platform/plans", "platform");
+  const { data: modules } = useFetch<Mod[]>("/platform/modules", "platform");
   const [editing, setEditing] = useState<Plan | "new" | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
 
@@ -28,7 +29,7 @@ export default function PlansPage() {
     <>
       <PageHeader title="Plans" subtitle="Subscription plans shown on the pricing page." actions={<Button onClick={() => setEditing("new")}>New plan</Button>} />
       <ErrorText error={error ?? actionError} />
-      <Card>
+      <Card className="max-sm:[&_:is(th,td):nth-child(n+3):nth-child(-n+6)]:hidden">
         {!data ? <Spinner /> : (
           <Table
             rows={data}
@@ -42,7 +43,7 @@ export default function PlansPage() {
               ["Accounts", (p) => p.tenants_count ?? 0],
               ["Status", (p) => <Badge tone={p.is_active ? "green" : "gray"}>{p.is_active ? "active" : "hidden"}</Badge>],
               ["", (p) => (
-                <Button variant="ghost" className="px-2 py-1 text-red-600" disabled={!!p.tenants_count}
+                <Button variant="danger-ghost" className="px-2 py-1" disabled={!!p.tenants_count}
                   title={p.tenants_count ? "In use" : "Delete"} onClick={(e) => { e.stopPropagation(); remove(p); }}>Delete</Button>
               )],
             ]}
@@ -78,7 +79,7 @@ function PlanForm({ plan, addons, onDone }: { plan: Plan | null; addons: Mod[]; 
     setBusy(true);
     setError(null);
     const body = {
-      name: form.name, slug: form.slug, price_monthly: toCents(form.price_monthly), price_yearly: toCents(form.price_yearly),
+      name: form.name, slug: form.slug, price_monthly: toCents(form.price_monthly) ?? 0, price_yearly: toCents(form.price_yearly) ?? 0,
       max_users: Number(form.max_users), sort: Number(form.sort), is_active: form.is_active, included_modules: form.included_modules,
       features: form.features.split("\n").map((f) => f.trim()).filter(Boolean),
     };
@@ -94,7 +95,7 @@ function PlanForm({ plan, addons, onDone }: { plan: Plan | null; addons: Mod[]; 
   return (
     <form onSubmit={submit} className="space-y-3">
       <ErrorText error={error} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Name" error={fieldError(error, "name")}><Input value={form.name} onChange={set("name")} required /></Field>
         <Field label="Slug" error={fieldError(error, "slug")}><Input value={form.slug} onChange={set("slug")} required pattern="[a-z0-9-]+" /></Field>
         <Field label="Monthly price ($)" error={fieldError(error, "price_monthly")}><Input type="number" min="0" step="0.01" value={form.price_monthly} onChange={set("price_monthly")} /></Field>
@@ -104,7 +105,7 @@ function PlanForm({ plan, addons, onDone }: { plan: Plan | null; addons: Mod[]; 
       </div>
       <div>
         <p className="mb-1 text-sm font-medium text-slate-700">Included add-ons</p>
-        <div className="grid grid-cols-2 gap-1">
+        <div className="grid gap-1 sm:grid-cols-2">
           {addons.map((m) => (
             <label key={m.key} className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="accent-brand-600" checked={form.included_modules.includes(m.key)} onChange={() => toggle(m.key)} />

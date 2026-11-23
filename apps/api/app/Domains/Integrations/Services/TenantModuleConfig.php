@@ -22,6 +22,6 @@ class TenantModuleConfig
 
     public static function frontend(string $path = ''): string
     {
-        return rtrim((string) (config('services.frontend_url') ?: 'http://127.0.0.1:3010'), '/').$path;
+        return rtrim((string) config('services.frontend_url'), '/').$path;
     }
 }

@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { money } from "@/lib/api";
+import { formatDate, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { Card, ErrorText, PageHeader, Spinner, Stat, Table } from "@/components/ui";
-import { StatusBadge, TENANT_STATUSES, date, useLoad, type Tenant } from "./_shared";
+import { StatusBadge, TENANT_STATUSES, type Tenant } from "./_shared";
 
 type Overview = {
   tenants: { total: number; by_status: Record<string, number> };
@@ -15,7 +16,7 @@ type Overview = {
 
 export default function AdminOverviewPage() {
   const router = useRouter();
-  const { data, error } = useLoad<Overview>("/platform/overview");
+  const { data, error } = useFetch<Overview>("/platform/overview", "platform");
   if (error) return <ErrorText error={error} />;
   if (!data) return <Spinner />;
 
@@ -39,7 +40,7 @@ export default function AdminOverviewPage() {
             ))}
           </ul>
         </Card>
-        <Card title="Recent sign-ups" className="lg:col-span-2">
+        <Card title="Recent sign-ups" className="min-w-0 lg:col-span-2 max-sm:[&_:is(th,td):nth-child(2)]:hidden max-sm:[&_:is(th,td):nth-child(4)]:hidden">
           <Table
             rows={data.recent_tenants}
             onRow={(t) => router.push(`/admin/tenants/${t.id}`)}
@@ -48,7 +49,7 @@ export default function AdminOverviewPage() {
               ["Plan", (t) => t.plan?.name ?? "—"],
               ["Status", (t) => <StatusBadge status={t.status} />],
               ["Users", (t) => t.users_count ?? 0],
-              ["Created", (t) => date(t.created_at)],
+              ["Created", (t) => <span className="whitespace-nowrap">{formatDate(t.created_at)}</span>],
             ]}
           />
         </Card>

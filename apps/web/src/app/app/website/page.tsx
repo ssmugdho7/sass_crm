@@ -1,52 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { crm } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Spinner, Textarea, fieldError } from "@/components/ui";
 import type { SiteSettings } from "@/components/site/types";
 import { CollectionEditor, ImageInput, priceLabel } from "./editors";
 
-type Checklist = { percent: number; done: number; total: number; items: { key: string; label: string; done: boolean; hint: string }[] };
+type ChecklistItem = { key: string; label: string; done: boolean; hint: string; tab?: string };
+type Checklist = { percent: number; done: number; total: number; items: ChecklistItem[] };
 type Importable = { id: number; name: string; site_address: string | null; due_date: string | null };
 
+// [tab key, label, public-site section anchor ("" = top of page)]
 const TABS = [
-  ["branding", "Branding & SEO"],
-  ["hero", "Hero & About"],
-  ["services", "Services"],
-  ["portfolio", "Portfolio"],
-  ["testimonials", "Testimonials"],
-  ["team", "Team"],
-  ["faqs", "FAQ"],
-  ["contact", "Contact & areas"],
+  ["branding", "Branding & SEO", ""],
+  ["hero", "Hero & About", "about"],
+  ["services", "Services", "services"],
+  ["portfolio", "Portfolio", "projects"],
+  ["testimonials", "Testimonials", "reviews"],
+  ["team", "Team", "team"],
+  ["faqs", "FAQ", "faq"],
+  ["contact", "Contact & areas", "contact"],
 ] as const;
 type Tab = (typeof TABS)[number][0];
+const isTab = (t: unknown): t is Tab => TABS.some(([k]) => k === t);
 
-// Which tab completes each checklist item.
+// Fallback when the API doesn't send `tab` for a checklist item.
 const ITEM_TAB: Record<string, Tab> = {
   logo: "branding", seo: "branding", hero: "hero", about: "hero", services: "services", portfolio: "portfolio",
   testimonial: "testimonials", team: "team", faq: "faqs", contact: "contact", areas: "contact",
 };
+const itemTab = (i: ChecklistItem): Tab => (isTab(i.tab) ? i.tab : ITEM_TAB[i.key] ?? "branding");
+
+const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2";
 
 export default function WebsiteBuilderPage() {
   const { me } = useSession();
   const [tab, setTab] = useState<Tab>("branding");
-  const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [checklist, setChecklist] = useState<Checklist | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  const { data: settings, setData: setSettings, error } = useFetch<SiteSettings>("/app/website/settings");
+  const { data: checklist, reload: loadChecklist } = useFetch<Checklist>("/app/website/checklist");
   const [saveError, setSaveError] = useState<unknown>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
-
-  const loadChecklist = useCallback(() => {
-    crm<Checklist>("/app/website/checklist").then(setChecklist).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    crm<SiteSettings>("/app/website/settings").then(setSettings).catch(setError);
-    loadChecklist();
-  }, [loadChecklist]);
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof SiteSettings>(k: K, v: SiteSettings[K]) => {
     setSettings((s) => (s ? { ...s, [k]: v } : s));
@@ -70,6 +68,14 @@ export default function WebsiteBuilderPage() {
     }
   };
 
+  const goTo = (t: Tab) => {
+    setTab(t);
+    requestAnimationFrame(() => {
+      tabsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      tabsRef.current?.querySelector<HTMLButtonElement>(`[data-tab="${t}"]`)?.focus({ preventScroll: true });
+    });
+  };
+
   const slug = me?.tenant?.slug;
   const liveUrl = slug ? `/site/${slug}` : null;
 
@@ -77,9 +83,10 @@ export default function WebsiteBuilderPage() {
   if (!settings) return <Spinner />;
 
   const settingsTab = ["branding", "hero", "contact"].includes(tab);
+  const [, tabLabel, anchor] = TABS.find(([k]) => k === tab)!;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <PageHeader
         title="Website"
         subtitle="Your public company website grows from the content you add here."
@@ -90,7 +97,7 @@ export default function WebsiteBuilderPage() {
             </Button>
             {liveUrl && (
               <a href={liveUrl} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+                className={`inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 ${focusRing}`}>
                 View live site ↗
               </a>
             )}
@@ -98,15 +105,28 @@ export default function WebsiteBuilderPage() {
         }
       />
 
-      <ProgressCard checklist={checklist} published={settings.published} url={liveUrl} onPick={(k) => setTab(ITEM_TAB[k] ?? "branding")} />
+      <ProgressCard checklist={checklist} published={settings.published} url={liveUrl} onPick={(i) => goTo(itemTab(i))} />
 
-      <div className="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
-        {TABS.map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
-            className={`whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition ${tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-            {label}
-          </button>
-        ))}
+      <div ref={tabsRef} className="scroll-mt-4 space-y-3">
+        <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 px-1" role="tablist" aria-label="Website sections">
+          {TABS.map(([k, label]) => (
+            <button key={k} type="button" role="tab" data-tab={k} aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-4 py-2.5 text-sm font-medium transition ${focusRing} ${tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {liveUrl && (
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <p className="text-slate-500">
+              {tabLabel} appears on your public website{settings.published ? "" : " once you publish it"}.
+            </p>
+            <a href={`${liveUrl}${anchor ? `#${anchor}` : ""}`} target="_blank" rel="noopener noreferrer"
+              className={`rounded font-medium text-brand-700 hover:underline ${focusRing}`}>
+              Preview on site ↗
+            </a>
+          </div>
+        )}
       </div>
 
       {settingsTab && (
@@ -114,7 +134,7 @@ export default function WebsiteBuilderPage() {
           {tab === "branding" && <BrandingForm s={settings} set={set} err={saveError} />}
           {tab === "hero" && <HeroForm s={settings} set={set} err={saveError} />}
           {tab === "contact" && <ContactForm s={settings} set={set} err={saveError} />}
-          <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/95 py-3 backdrop-blur">
+          <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/95 py-3 backdrop-blur">
             <ErrorText error={saveError} />
             {!saveError && savedAt && !dirty && <span className="text-sm text-emerald-600">Saved</span>}
             {dirty && <span className="text-sm text-slate-500">Unsaved changes</span>}
@@ -178,36 +198,71 @@ export default function WebsiteBuilderPage() {
   );
 }
 
-function ProgressCard({ checklist, published, url, onPick }: { checklist: Checklist | null; published: boolean; url: string | null; onPick: (key: string) => void }) {
+function ProgressCard({ checklist, published, url, onPick }: { checklist: Checklist | null; published: boolean; url: string | null; onPick: (item: ChecklistItem) => void }) {
+  const percent = checklist?.percent ?? 0;
+  const remaining = checklist?.items.filter((i) => !i.done) ?? [];
+  const finished = checklist?.items.filter((i) => i.done) ?? [];
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-semibold text-slate-900">Website completion</h2>
             <Badge tone={published ? "green" : "amber"}>{published ? "Live" : "Unpublished"}</Badge>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            {checklist ? `${checklist.done} of ${checklist.total} steps done.` : "Loading…"} {url && <span className="font-mono text-xs text-slate-400">{url}</span>}
-          </p>
+          <p className="mt-1 text-sm text-slate-600">Every service, project and review you add here appears on your public website.</p>
+          {url && <p className="mt-1 break-all font-mono text-xs text-slate-400">{url}</p>}
         </div>
-        <p className="text-3xl font-bold text-brand-600">{checklist?.percent ?? 0}%</p>
+        <p className="shrink-0 text-right">
+          <span className="block text-3xl font-bold text-brand-600">{percent}%</span>
+          <span className="text-xs text-slate-500">complete</span>
+        </p>
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${checklist?.percent ?? 0}%` }} />
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-label="Website completion" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+        <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${percent}%` }} />
       </div>
-      {checklist && (
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {checklist.items.map((i) => (
-            <li key={i.key}>
-              <button type="button" onClick={() => onPick(i.key)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-slate-50">
-                <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${i.done ? "bg-emerald-500 text-white" : "border border-slate-300 text-transparent"}`}>✓</span>
-                <span className={i.done ? "text-slate-400 line-through" : "text-slate-700"}>{i.label}</span>
-                {!i.done && <span className="ml-auto text-xs text-slate-400">{i.hint}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {!checklist ? (
+        <p className="mt-4 text-sm text-slate-500">Loading checklist…</p>
+      ) : (
+        <div className="mt-5 space-y-5">
+          {remaining.length > 0 ? (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                Next steps · {remaining.length} left
+              </h3>
+              <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+                {remaining.map((i) => (
+                  <li key={i.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
+                    <span className="h-5 w-5 shrink-0 rounded-full border-2 border-slate-300" aria-hidden />
+                    <div className="min-w-0 flex-1 basis-40">
+                      <p className="text-sm font-medium text-slate-800">{i.label}</p>
+                      <p className="text-xs text-slate-500">{i.hint}</p>
+                    </div>
+                    <Button type="button" variant="secondary" className="px-3 py-1.5" onClick={() => onPick(i)} aria-label={`Do it: ${i.label}`}>
+                      Do it →
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700">All steps done — your website is complete. Keep adding projects and reviews as you win them.</p>
+          )}
+          {finished.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Done · {finished.length}</h3>
+              <ul className="mt-2 grid gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                {finished.map((i) => (
+                  <li key={i.key} className="flex items-center gap-2 text-sm text-slate-700">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-xs text-white" aria-hidden>✓</span>
+                    <span className="min-w-0">{i.label}</span>
+                    <span className="sr-only">(done)</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       )}
     </Card>
   );
@@ -217,17 +272,17 @@ type FormProps = { s: SiteSettings; set: <K extends keyof SiteSettings>(k: K, v:
 
 function BrandingForm({ s, set, err }: FormProps) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
       <Card title="Branding">
         <div className="space-y-4">
           <ImageInput label="Logo" value={s.logo_url} onChange={(u) => set("logo_url", u)} error={fieldError(err, "logo_url")} />
           <Field label="Accent color" error={fieldError(err, "theme_color")}>
             <div className="flex items-center gap-3">
-              <input type="color" value={s.theme_color} onChange={(e) => set("theme_color", e.target.value)} className="h-10 w-14 cursor-pointer rounded border border-slate-300 bg-white" />
+              <input type="color" aria-label="Pick accent color" value={s.theme_color} onChange={(e) => set("theme_color", e.target.value)} className="h-10 w-14 cursor-pointer rounded border border-slate-300 bg-white" />
               <Input value={s.theme_color} onChange={(e) => set("theme_color", e.target.value)} className="max-w-32 font-mono" />
             </div>
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="License / insurance" error={fieldError(err, "license_info")}>
               <Input value={s.license_info ?? ""} onChange={(e) => set("license_info", e.target.value)} placeholder="License #12345 · Fully insured" />
             </Field>
@@ -258,7 +313,7 @@ function BrandingForm({ s, set, err }: FormProps) {
 
 function HeroForm({ s, set, err }: FormProps) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
       <Card title="Hero banner">
         <div className="space-y-4">
           <Field label="Headline" error={fieldError(err, "hero_title")}>
@@ -294,10 +349,10 @@ function ContactForm({ s, set, err }: FormProps) {
   };
   const social = s.social ?? { facebook: null, instagram: null, linkedin: null, youtube: null };
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 [&>*]:min-w-0">
       <Card title="Contact details">
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Phone" error={fieldError(err, "phone")}><Input value={s.phone ?? ""} onChange={(e) => set("phone", e.target.value)} /></Field>
             <Field label="Email" error={fieldError(err, "email")}><Input type="email" value={s.email ?? ""} onChange={(e) => set("email", e.target.value)} /></Field>
           </div>
@@ -316,16 +371,16 @@ function ContactForm({ s, set, err }: FormProps) {
           <ErrorText error={fieldError(err, "service_areas")} />
           <ul className="mt-3 flex flex-wrap gap-2">
             {areas.map((a) => (
-              <li key={a} className="inline-flex items-center gap-1 rounded-full bg-slate-100 py-1 pl-3 pr-1 text-sm text-slate-700">
+              <li key={a} className="inline-flex max-w-full items-center break-all gap-1 rounded-full bg-slate-100 py-1 pl-3 pr-1 text-sm text-slate-700">
                 {a}
-                <button type="button" aria-label={`Remove ${a}`} onClick={() => set("service_areas", areas.filter((x) => x !== a))} className="rounded-full px-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700">✕</button>
+                <button type="button" aria-label={`Remove ${a}`} onClick={() => set("service_areas", areas.filter((x) => x !== a))} className={`rounded-full px-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 ${focusRing}`}>✕</button>
               </li>
             ))}
             {!areas.length && <li className="text-sm text-slate-400">No areas yet.</li>}
           </ul>
         </Card>
         <Card title="Social links">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {(["facebook", "instagram", "linkedin", "youtube"] as const).map((k) => (
               <Field key={k} label={k[0].toUpperCase() + k.slice(1)} error={fieldError(err, `social.${k}`)}>
                 <Input type="url" value={social[k] ?? ""} placeholder="https://" onChange={(e) => set("social", { ...social, [k]: e.target.value || null })} />
@@ -374,7 +429,7 @@ function PortfolioTab({ onChanged }: { onChanged: () => void }) {
     <>
       <CollectionEditor collection="portfolio" title="Portfolio" onChanged={onChanged} reloadKey={reloadKey}
         empty="Showcase your finished jobs with photos — it's what wins new work."
-        extraActions={<Button variant="secondary" onClick={show}>Import from completed project</Button>}
+        extraActions={<Button variant="secondary" onClick={show}>Import from project</Button>}
         summary={(r) => ({
           primary: String(r.title),
           secondary: [r.category, r.location, Array.isArray(r.images) ? `${r.images.length} photos` : null].filter(Boolean).join(" · "),
@@ -400,8 +455,8 @@ function PortfolioTab({ onChanged }: { onChanged: () => void }) {
         ) : (
           <ul className="divide-y divide-slate-100">
             {projects.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-slate-900">{p.name}</p>
                   {p.site_address && <p className="truncate text-sm text-slate-500">{p.site_address}</p>}
                 </div>

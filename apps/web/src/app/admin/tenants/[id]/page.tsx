@@ -2,10 +2,11 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { money, platform } from "@/lib/api";
+import { formatDate, money, platform } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Select, Spinner, Table, cx, fieldError } from "@/components/ui";
 import {
-  StatusBadge, TENANT_STATUSES, UserEditModal, date, useLoad,
+  StatusBadge, TENANT_STATUSES, UserEditModal,
   type AdminUser, type PermissionGroup, type Plan, type Role, type Tenant,
 } from "../../_shared";
 
@@ -16,12 +17,19 @@ const TABS = ["Profile", "Add-ons", "Users", "Roles"] as const;
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { data, error, reload } = useLoad<Detail>(`/platform/tenants/${id}`);
+  const { data, error, reload } = useFetch<Detail>(`/platform/tenants/${id}`, "platform");
   const [tab, setTab] = useState<(typeof TABS)[number]>("Profile");
   const [actionError, setActionError] = useState<unknown>(null);
 
   async function destroy() {
-    if (!data || prompt(`Type "${data.tenant.slug}" to permanently delete this account and all its data.`) !== data.tenant.slug) return;
+    if (!data) return;
+    const name = data.tenant.name;
+    const typed = prompt(`This permanently deletes "${name}" and all its data. Type the account name to confirm:`);
+    if (typed === null) return;
+    if (typed.trim() !== name.trim()) {
+      setActionError(new Error("The account name didn't match — nothing was deleted."));
+      return;
+    }
     try {
       await platform(`/platform/tenants/${id}`, { method: "DELETE" });
       router.push("/admin/tenants");
@@ -39,14 +47,19 @@ export default function TenantDetailPage() {
       <Link href="/admin/tenants" className="text-sm text-slate-500 hover:text-slate-800">← CRM Accounts</Link>
       <PageHeader
         title={t.name}
-        subtitle={`/${t.slug} · ${t.plan?.name ?? "No plan"} · created ${date(t.created_at)}`}
-        actions={<><StatusBadge status={t.status} /><Button variant="danger" className="px-3 py-1.5" onClick={destroy}>Delete account</Button></>}
+        subtitle={`/${t.slug} · ${t.plan?.name ?? "No plan"} · created ${formatDate(t.created_at)}`}
+        actions={
+          <div className="flex items-center gap-3">
+            <StatusBadge status={t.status} />
+            <Button variant="danger-ghost" className="px-3 py-1.5" onClick={destroy}>Delete account</Button>
+          </div>
+        }
       />
       <ErrorText error={actionError} />
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((x) => (
           <button key={x} onClick={() => setTab(x)}
-            className={cx("-mb-px border-b-2 px-4 py-2 text-sm font-medium", tab === x ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800")}>
+            className={cx("-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium", tab === x ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800")}>
             {x}
           </button>
         ))}
@@ -62,7 +75,7 @@ export default function TenantDetailPage() {
 const dateInput = (d: string | null) => (d ? d.slice(0, 10) : "");
 
 function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }) {
-  const { data: plans } = useLoad<Plan[]>("/platform/plans");
+  const { data: plans } = useFetch<Plan[]>("/platform/plans", "platform");
   const [form, setForm] = useState({
     name: tenant.name, slug: tenant.slug, email: tenant.email ?? "", phone: tenant.phone ?? "", plan_id: tenant.plan_id ? String(tenant.plan_id) : "",
     status: tenant.status, billing_cycle: tenant.billing_cycle, trial_ends_at: dateInput(tenant.trial_ends_at), current_period_end: dateInput(tenant.current_period_end),
@@ -97,7 +110,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
     <Card>
       <form onSubmit={submit} className="space-y-4">
         <ErrorText error={error} />
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           <Field label="Company name" error={fieldError(error, "name")}><Input value={form.name} onChange={set("name")} required /></Field>
           <Field label="Slug (website URL)" error={fieldError(error, "slug")}><Input value={form.slug} onChange={set("slug")} required /></Field>
           <Field label="Email" error={fieldError(error, "email")}><Input type="email" value={form.email} onChange={set("email")} /></Field>
@@ -149,7 +162,7 @@ function AddonsTab({ tenantId, modules, onChanged }: { tenantId: number; modules
   }
 
   return (
-    <Card>
+    <Card className="max-sm:[&_:is(th,td):nth-child(2)]:hidden max-sm:[&_:is(th,td):nth-child(4)]:hidden">
       <ErrorText error={error} />
       <Table
         rows={modules}
@@ -175,17 +188,17 @@ function UsersTab({ users, roles, onChanged }: { users: AdminUser[]; roles: Role
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const roleName = (id: number | null) => roles.find((r) => r.id === id)?.name ?? "—";
   return (
-    <Card>
+    <Card className="max-sm:[&_:is(th,td):nth-child(n+2):nth-child(-n+4)]:hidden max-sm:[&_:is(th,td):nth-child(6)]:hidden">
       <Table
         rows={users}
         onRow={setEditing}
         columns={[
-          ["Name", (u) => <span className="font-medium text-slate-900">{u.name}</span>],
+          ["Name", (u) => <div><p className="font-medium text-slate-900">{u.name}</p><p className="text-xs text-slate-500 sm:hidden">{u.email}</p></div>],
           ["Email", (u) => u.email],
           ["Phone", (u) => u.phone ?? "—"],
           ["Role", (u) => roleName(u.role_id)],
           ["Status", (u) => <StatusBadge status={u.status} />],
-          ["Last login", (u) => date(u.last_login_at)],
+          ["Last login", (u) => formatDate(u.last_login_at)],
         ]}
       />
       <UserEditModal user={editing} roles={roles} onClose={() => setEditing(null)} onSaved={onChanged} />
@@ -194,7 +207,7 @@ function UsersTab({ users, roles, onChanged }: { users: AdminUser[]; roles: Role
 }
 
 function RolesTab({ tenantId, roles, onChanged }: { tenantId: number; roles: Role[]; onChanged: () => void }) {
-  const { data: catalog } = useLoad<{ modules: PermissionGroup[] }>("/platform/permissions");
+  const { data: catalog } = useFetch<{ modules: PermissionGroup[] }>("/platform/permissions", "platform");
   const [editing, setEditing] = useState<Role | "new" | null>(null);
   const [error, setError] = useState<unknown>(null);
 
@@ -210,17 +223,17 @@ function RolesTab({ tenantId, roles, onChanged }: { tenantId: number; roles: Rol
   }
 
   return (
-    <Card title="Roles" actions={<Button className="px-3 py-1.5" onClick={() => setEditing("new")}>New role</Button>}>
+    <Card title="Roles" className="max-sm:[&_:is(th,td):nth-child(3)]:hidden" actions={<Button className="px-3 py-1.5" onClick={() => setEditing("new")}>New role</Button>}>
       <ErrorText error={error} />
       <Table
         rows={roles}
         onRow={setEditing}
         columns={[
-          ["Role", (r) => <span className="font-medium text-slate-900">{r.name} {r.is_system && <Badge tone="blue">system</Badge>}</span>],
+          ["Role", (r) => <span className="flex items-center gap-2 font-medium text-slate-900">{r.name} {r.is_system && <Badge tone="blue">system</Badge>}</span>],
           ["Permissions", (r) => (r.permissions.includes("*") ? "Full access" : `${r.permissions.length} permissions`)],
           ["Users", (r) => r.users_count ?? 0],
           ["", (r) => !r.is_system && (
-            <Button variant="ghost" className="px-2 py-1 text-red-600" disabled={!!r.users_count} title={r.users_count ? "Has users" : "Delete"}
+            <Button variant="danger-ghost" className="px-2 py-1" disabled={!!r.users_count} title={r.users_count ? "Has users" : "Delete"}
               onClick={(e) => { e.stopPropagation(); remove(r); }}>Delete</Button>
           )],
         ]}
@@ -275,11 +288,11 @@ function RoleForm({ tenantId, role, groups, onDone }: { tenantId: number; role: 
       {!full && (
         <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
           {groups.map((g) => (
-            <div key={g.key} className="flex items-start justify-between gap-3 px-3 py-2">
+            <div key={g.key} className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <button type="button" onClick={() => toggleGroup(g)} className="text-left text-sm font-medium text-slate-800 hover:text-brand-700">
                 {g.name} {!g.core && <span className="text-xs font-normal text-slate-400">add-on</span>}
               </button>
-              <div className="flex flex-wrap justify-end gap-3">
+              <div className="flex flex-wrap gap-3 sm:justify-end">
                 {g.permissions.map((p) => (
                   <label key={p} className="flex items-center gap-1.5 text-xs text-slate-600">
                     <input type="checkbox" className="accent-brand-600" checked={perms.includes(p)} onChange={() => toggle(p)} />

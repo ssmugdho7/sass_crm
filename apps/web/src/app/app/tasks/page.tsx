@@ -2,10 +2,11 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { can, crm } from "@/lib/api";
+import { can, crm, formatDate } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Link, Modal, PageHeader, Select, Spinner, Table } from "@/components/ui";
-import { Pager, TASK_STATUSES, isOverdue, label, tone, useFetch, useUsers, type Page, type Project, type Task } from "../projects/_crm/shared";
+import { MobileList, Pager, TASK_STATUSES, isOverdue, label, tone, useUsers, type Page, type Project, type Task } from "../projects/_crm/shared";
 import { TaskForm, TaskToggle } from "../projects/_crm/forms";
 
 function TasksPage() {
@@ -51,16 +52,16 @@ function TasksPage() {
       <PageHeader title="Tasks" subtitle="Work to do across all your jobs." actions={manage && <Button onClick={() => setEditing("new")}>+ New task</Button>} />
       <Card>
         <div className="mb-4 flex flex-wrap gap-3">
-          <Select value={status} onChange={(e) => reset(setStatus)(e.target.value)} className="max-w-[10rem]">
+          <Select value={status} onChange={(e) => reset(setStatus)(e.target.value)} className="w-full sm:max-w-[10rem]">
             <option value="open">Open</option>
             <option value="">All statuses</option>
             {TASK_STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
           </Select>
-          <Select value={projectId} onChange={(e) => reset(setProjectId)(e.target.value)} className="max-w-[16rem]">
+          <Select value={projectId} onChange={(e) => reset(setProjectId)(e.target.value)} className="w-full sm:max-w-[16rem]">
             <option value="">All projects</option>
             {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          <Select value={assignee} onChange={(e) => reset(setAssignee)(e.target.value)} className="max-w-[12rem]">
+          <Select value={assignee} onChange={(e) => reset(setAssignee)(e.target.value)} className="w-full sm:max-w-[12rem]">
             <option value="">Anyone</option>
             <option value="me">Assigned to me</option>
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -69,6 +70,32 @@ function TasksPage() {
         <ErrorText error={error || actionError} />
         {!data ? !error && <Spinner /> : (
           <>
+            <MobileList
+              rows={data.data}
+              empty="No tasks match."
+              render={(t) => (
+                <div className="flex items-start gap-3">
+                  <TaskToggle task={t} disabled={!manage} onChange={replace} />
+                  <div className="min-w-0 flex-1">
+                    <p className={t.status === "done" ? "truncate text-slate-400 line-through" : "truncate font-medium text-slate-900"}>{t.title}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      <span className={isOverdue(t) ? "whitespace-nowrap font-medium text-red-600" : "whitespace-nowrap"}>{formatDate(t.due_date)}{isOverdue(t) && " · overdue"}</span>
+                      {" · "}{t.project?.name ?? "No project"} · {t.assignee?.name ?? "Unassigned"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <Badge tone={tone(t.priority)}>{label(t.priority)}</Badge>
+                      {manage && (
+                        <>
+                          <Button variant="ghost" className="ml-auto px-2 py-1" onClick={() => setEditing(t)}>Edit</Button>
+                          <Button variant="danger-ghost" className="px-2 py-1" onClick={() => remove(t)}>Delete</Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            />
+            <div className="hidden sm:block">
             <Table
               rows={data.data}
               empty="No tasks match."
@@ -77,7 +104,7 @@ function TasksPage() {
                 ["Task", (t) => <span className={t.status === "done" ? "text-slate-400 line-through" : "font-medium text-slate-900"}>{t.title}</span>],
                 ["Project", (t) => (t.project ? <Link href={`/app/projects/${t.project.id}`} className="text-brand-700 hover:underline">{t.project.name}</Link> : "—")],
                 ["Priority", (t) => <Badge tone={tone(t.priority)}>{label(t.priority)}</Badge>],
-                ["Due", (t) => <span className={isOverdue(t) ? "font-medium text-red-600" : ""}>{t.due_date ?? "—"}{isOverdue(t) && " · overdue"}</span>],
+                ["Due", (t) => <span className={isOverdue(t) ? "whitespace-nowrap font-medium text-red-600" : "whitespace-nowrap"}>{formatDate(t.due_date)}{isOverdue(t) && " · overdue"}</span>],
                 ["Assignee", (t) => t.assignee?.name ?? "—"],
                 ["Status", (t) => manage ? (
                   <Select value={t.status} onChange={(e) => setTaskStatus(t, e.target.value)} className="w-auto py-1 text-xs">
@@ -87,11 +114,12 @@ function TasksPage() {
                 ["", (t) => manage && (
                   <div className="flex justify-end gap-1">
                     <Button variant="ghost" className="px-2 py-1" onClick={() => setEditing(t)}>Edit</Button>
-                    <Button variant="ghost" className="px-2 py-1 text-red-600" onClick={() => remove(t)}>Delete</Button>
+                    <Button variant="danger-ghost" className="px-2 py-1" onClick={() => remove(t)}>Delete</Button>
                   </div>
                 )],
               ]}
             />
+            </div>
             <Pager page={data.current_page} last={data.last_page} onPage={setPage} />
           </>
         )}

@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { can, crm, money } from "@/lib/api";
+import { can, formatDate, money } from "@/lib/api";
+import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Button, Card, ErrorText, Input, Link, PageHeader, Select, Spinner, Table } from "@/components/ui";
 import { StatusBadge } from "./StatusBadge";
@@ -17,28 +18,24 @@ export function DocumentList({ kind }: { kind: DocKind }) {
   const [status, setStatus] = useState("");
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
-  const [res, setRes] = useState<Paginated<SalesDoc> | null>(null);
-  const [error, setError] = useState<unknown>(null);
-
-  const load = useCallback(() => {
-    const params = new URLSearchParams({ page: String(page) });
-    if (status) params.set("status", status);
-    if (q.trim()) params.set("q", q.trim());
-    crm<Paginated<SalesDoc>>(`/app/${path}?${params}`).then(setRes).catch(setError);
-  }, [path, page, status, q]);
-
+  const [search, setSearch] = useState(""); // debounced q
   useEffect(() => {
-    const t = setTimeout(load, 250);
+    const t = setTimeout(() => setSearch(q.trim()), 250);
     return () => clearTimeout(t);
-  }, [load]);
+  }, [q]);
+
+  const params = new URLSearchParams({ page: String(page) });
+  if (status) params.set("status", status);
+  if (search) params.set("q", search);
+  const { data: res, error } = useFetch<Paginated<SalesDoc>>(`/app/${path}?${params}`);
 
   const title = kind === "invoice" ? "Invoices" : "Estimates";
   const columns: [string, (r: SalesDoc) => React.ReactNode][] = [
     ["Number", (r) => <span className="font-medium text-slate-900">{r.number}</span>],
     ["Customer", (r) => r.customer?.name ?? "—"],
     ["Project", (r) => r.project?.name ?? "—"],
-    ["Issued", (r) => r.issue_date ?? "—"],
-    [kind === "invoice" ? "Due" : "Valid until", (r) => (kind === "invoice" ? r.due_date : r.expiry_date) ?? "—"],
+    ["Issued", (r) => formatDate(r.issue_date)],
+    [kind === "invoice" ? "Due" : "Valid until", (r) => formatDate(kind === "invoice" ? r.due_date : r.expiry_date)],
     ["Total", (r) => money(r.total)],
     ...(kind === "invoice" ? [["Balance", (r: SalesDoc) => money(r.balance ?? 0)] as [string, (r: SalesDoc) => React.ReactNode]] : []),
     ["Status", (r) => <StatusBadge status={r.status} overdue={r.is_overdue} />],
@@ -53,8 +50,8 @@ export function DocumentList({ kind }: { kind: DocKind }) {
       />
       <Card>
         <div className="mb-4 flex flex-wrap gap-3">
-          <Input className="max-w-xs" placeholder="Search number or customer…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
-          <Select className="max-w-[12rem]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} aria-label="Status filter">
+          <Input className="w-full sm:max-w-xs" placeholder="Search number or customer…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+          <Select className="w-full sm:max-w-[12rem]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} aria-label="Status filter">
             <option value="">All statuses</option>
             {statuses.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
           </Select>
@@ -62,7 +59,30 @@ export function DocumentList({ kind }: { kind: DocKind }) {
         <ErrorText error={error} />
         {!res ? <Spinner /> : (
           <>
-            <Table rows={res.data} columns={columns} empty={`No ${path} yet.`} onRow={(r) => router.push(`/app/${path}/${r.id}`)} />
+            {/* Small screens: stacked cards instead of a wide table. */}
+            <ul className="divide-y divide-slate-100 sm:hidden">
+              {!res.data.length && <li className="py-10 text-center text-sm text-slate-500">No {path} yet.</li>}
+              {res.data.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/app/${path}/${r.id}`} className="block py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-900">{r.number}</span>
+                      <StatusBadge status={r.status} overdue={r.is_overdue} />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-2 text-sm text-slate-600">
+                      <span className="truncate">{r.customer?.name ?? "—"}</span>
+                      <span className="shrink-0 font-medium text-slate-800">{money(kind === "invoice" ? (r.balance ?? 0) : r.total)}</span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500">
+                      {kind === "invoice" ? `Due ${formatDate(r.due_date)}` : `Issued ${formatDate(r.issue_date)}`}
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden sm:block">
+              <Table rows={res.data} columns={columns} empty={`No ${path} yet.`} onRow={(r) => router.push(`/app/${path}/${r.id}`)} />
+            </div>
             {res.last_page > 1 && (
               <div className="mt-4 flex items-center justify-end gap-2 text-sm text-slate-600">
                 <Button variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
