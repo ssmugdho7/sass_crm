@@ -22,6 +22,8 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
   - Super admin: `Route::middleware(['auth:sanctum', 'super'])->prefix('platform')`.
   - Public (no auth, throttle writes): `Route::prefix('public')`.
 - Module catalog = `config/crm_modules.php`, synced into `modules` by `php artisan modules:sync` (run on deploy; seeder calls it). Domain service providers `app/Domains/{Name}/{Name}ServiceProvider.php` are auto-registered. Core modules are always on; add-ons are rows in `tenant_modules` (`status`, encrypted `config`). `Tenant::hasModule($key)`.
+- Validate referenced ids with `App\Support\Tenancy\TenantRules::exists($table)`. Tenant route params are numeric ids (`{fooId}`) looked up via the scoped model (`Foo::findOrFail`).
+- Permissions: `account.manage` (billing, add-ons install/config, company profile) is separate from `team.manage` (users/roles).
 - Money is integer cents everywhere. Recording an invoice payment goes only through `App\Domains\Sales\Actions\RecordPayment`.
 - Controllers stay thin: validate → model/Action → JSON. Return plain arrays/models or `->paginate(25)`.
 - Tests: `tests/Feature/{Domain}/`, `RefreshDatabase` + `$seed = true`. Login helper: POST `/api/auth/login` and use the token, or `Sanctum::actingAs($user)`.
@@ -29,7 +31,7 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
 ## Frontend rules
 - `src/lib/api.ts`: `crm()` / `platform()` fetch helpers (bearer token per realm), `ApiError`, `can(me, perm)`, `hasModule(me, key)`, `money(cents)`, `toCents(dollars)`, `toDollars(cents)`, `formatDate(iso)` (the only date format). `src/lib/useFetch.ts`: `useFetch(path, realm)` for GET loads — use it instead of ad-hoc useEffect fetching.
 - `src/lib/session.tsx`: `useSession()` → `{ me, refresh, logout }` inside `/app` (realm crm) and `/admin` (realm platform). Call `refresh()` after changing modules/roles.
-- `src/components/ui`: Button, Field, Input, Textarea, Select, Card, PageHeader, Badge, Table, Modal, Stat, ErrorText, fieldError, Spinner. Use them; brand color is `brand-*` (orange) on slate.
+- `src/components/ui`: Button, Field, Input, Textarea, Select, Card, PageHeader, Badge (auto-labels status strings), statusLabel, Table (empty accepts a node), EmptyState, Modal, Stat, ErrorText, fieldError, Spinner. Readable text is `text-slate-500` or darker (never slate-400 on white). Use them; brand color is `brand-*` (orange) on slate.
 - `src/lib/nav.ts`: CRM sidebar entries (route, module, permission) and admin nav. Pages must exist at those routes.
 - Pages under `/app` and `/admin` are client components (`"use client"`).
 - Public tenant website: `/site/[slug]`.

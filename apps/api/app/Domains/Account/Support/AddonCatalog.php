@@ -12,7 +12,7 @@ class AddonCatalog
     /** @return array<string, array{key:string,name:string,category:string,description:string,price_monthly:int,schema:array<string,string>,permissions:list<string>}> */
     public static function available(): array
     {
-        $rows = Module::all()->keyBy('key');
+        $rows = Module::catalog();
         $out = [];
         foreach (config('crm_modules') as $key => $m) {
             if ($m['core']) {

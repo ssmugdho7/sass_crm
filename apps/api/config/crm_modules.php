@@ -10,7 +10,7 @@ return [
     'tasks' => ['name' => 'Tasks', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Assign and track work per job.', 'permissions' => ['tasks.view', 'tasks.manage']],
     'estimates' => ['name' => 'Estimates', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Line-item quotes that convert to invoices.', 'permissions' => ['estimates.view', 'estimates.manage']],
     'invoices' => ['name' => 'Invoices', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Bill clients and record payments.', 'permissions' => ['invoices.view', 'invoices.manage']],
-    'team' => ['name' => 'Team & Roles', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Invite staff and control what they can do.', 'permissions' => ['team.view', 'team.manage']],
+    'team' => ['name' => 'Team & Roles', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Invite staff and control what they can do.', 'permissions' => ['team.view', 'team.manage', 'account.manage']], // account.manage: billing, add-ons, company profile
     'website' => ['name' => 'Service Website', 'category' => 'core', 'core' => true, 'price' => 0, 'description' => 'Your public company website, built from the content you add.', 'permissions' => ['website.manage']],
 
     'payment_gateway' => ['name' => 'Online Payments (Stripe)', 'category' => 'payments', 'core' => false, 'price' => 1500, 'description' => 'Let clients pay invoices online by card through Stripe Checkout.', 'permissions' => ['payments.manage'], 'config' => ['publishable_key' => 'text', 'secret_key' => 'secret', 'webhook_secret' => 'secret', 'currency' => 'text']],

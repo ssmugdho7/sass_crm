@@ -45,7 +45,7 @@ class Tenant extends Model
         }
         $catalog = collect(config('crm_modules'));
         $core = $catalog->filter(fn ($m) => $m['core'])->keys();
-        $inactive = Module::where('is_active', false)->pluck('key')->all();
+        $inactive = Module::catalog()->where('is_active', false)->keys()->all();
         $installed = $this->modules()->where('status', 'active')->pluck('module_key')
             ->filter(fn ($k) => $catalog->has($k) && ! in_array($k, $inactive, true));
 

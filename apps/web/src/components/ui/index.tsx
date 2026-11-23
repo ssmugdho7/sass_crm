@@ -64,13 +64,18 @@ const tones: Record<string, string> = {
   blue: "bg-brand-50 text-brand-700 ring-brand-200",
   gray: "bg-slate-100 text-slate-700 ring-slate-200",
 };
+/** "past_due" → "Past due". Use for any status value shown to people. */
+export const statusLabel = (s: string) => s.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
 export const Badge = ({ tone = "gray", children }: { tone?: keyof typeof tones | string; children: React.ReactNode }) => (
-  <span className={cx("inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1", tones[tone] ?? tones.gray)}>{children}</span>
+  <span className={cx("inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1", tones[tone] ?? tones.gray)}>
+    {typeof children === "string" ? statusLabel(children) : children}
+  </span>
 );
 
 /** Simple data table. columns: [header, render(row)]. */
-export function Table<T>({ rows, columns, empty = "Nothing here yet.", onRow }: { rows: T[]; columns: [string, (r: T) => React.ReactNode][]; empty?: string; onRow?: (r: T) => void }) {
-  if (!rows.length) return <p className="py-10 text-center text-sm text-slate-500">{empty}</p>;
+export function Table<T>({ rows, columns, empty = "Nothing here yet.", onRow }: { rows: T[]; columns: [string, (r: T) => React.ReactNode][]; empty?: React.ReactNode; onRow?: (r: T) => void }) {
+  if (!rows.length) return typeof empty === "string" ? <p className="py-10 text-center text-sm text-slate-500">{empty}</p> : <>{empty}</>;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -108,7 +113,17 @@ export const Stat = ({ label, value, hint }: { label: string; value: React.React
   <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <p className="text-sm text-slate-500">{label}</p>
     <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
-    {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
+    {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+  </div>
+);
+
+/** First-run empty state: icon, title, hint and a primary action. */
+export const EmptyState = ({ icon, title, hint, action }: { icon?: string; title: string; hint?: string; action?: React.ReactNode }) => (
+  <div className="flex flex-col items-center px-4 py-12 text-center">
+    {icon && <div aria-hidden className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-2xl">{icon}</div>}
+    <p className="font-semibold text-slate-900">{title}</p>
+    {hint && <p className="mt-1 max-w-sm text-sm text-slate-600">{hint}</p>}
+    {action && <div className="mt-4">{action}</div>}
   </div>
 );
 

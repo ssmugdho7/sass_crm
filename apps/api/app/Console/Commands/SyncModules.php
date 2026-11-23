@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Module;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class SyncModules extends Command
 {
@@ -21,6 +22,7 @@ class SyncModules extends Command
             }
             $module->save();
         }
+        Cache::forget('modules.catalog');
         $this->info(count(config('crm_modules')).' modules synced.');
     }
 }
