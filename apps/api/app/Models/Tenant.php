@@ -32,7 +32,7 @@ class Tenant extends Model
 
     public function modules(): HasMany
     {
-        return $this->hasMany(TenantModule::class);
+        return $this->hasMany(TenantModule::class)->withoutGlobalScope('tenant');
     }
 
     /** Keys of every module this tenant can use: core + active installed add-ons. */

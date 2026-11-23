@@ -36,7 +36,7 @@ export function SessionProvider({ realm, loginPath, children }: { realm: Realm; 
   }, [realm, loginPath, router]);
 
   useEffect(() => {
-    refresh();
+    queueMicrotask(refresh);
   }, [refresh]);
 
   return <Ctx.Provider value={{ me, loading, refresh, logout }}>{children}</Ctx.Provider>;

@@ -16,7 +16,10 @@ class ResolveTenant
         $tenant = $user->tenant;
         abort_if(! $tenant->isAccessible(), 402, 'Subscription inactive. Contact support.');
         CurrentTenant::set($tenant);
-
-        return $next($request);
+        try {
+            return $next($request);
+        } finally {
+            CurrentTenant::set(null);
+        }
     }
 }

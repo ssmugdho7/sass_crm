@@ -15,6 +15,7 @@ export const crmNav: { href: string; label: string; module: string; perm: string
   { href: "/app/team", label: "Team & Roles", module: "team", perm: "team.view" },
   { href: "/app/addons", label: "Add-ons", module: "dashboard", perm: "team.manage" },
   { href: "/app/billing", label: "Subscription", module: "dashboard", perm: "team.manage" },
+  { href: "/app/settings", label: "Settings", module: "dashboard", perm: "dashboard.view" },
 ];
 
 export const adminNav = [

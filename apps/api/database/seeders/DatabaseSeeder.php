@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Domains\Crm\Database\DemoSeeder;
 use App\Domains\Identity\Actions\RegisterTenant;
 use App\Models\Module;
 use App\Models\Plan;
@@ -38,6 +39,15 @@ class DatabaseSeeder extends Seeder
         if (! User::where('email', 'owner@demo.test')->exists()) {
             app(RegisterTenant::class)([
                 'company' => 'Demo Builders', 'name' => 'Demo Owner', 'email' => 'owner@demo.test', 'password' => 'password', 'plan' => 'growth',
+            ]);
+        }
+
+        if (! app()->runningUnitTests()) {
+            $this->call([
+                DemoSeeder::class,
+                \App\Domains\Sales\Database\DemoSeeder::class,
+                \App\Domains\Operations\Database\DemoSeeder::class,
+                \App\Domains\Website\Database\DemoSeeder::class,
             ]);
         }
     }

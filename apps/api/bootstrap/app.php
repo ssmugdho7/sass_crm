@@ -1,9 +1,14 @@
 <?php
 
+use App\Http\Middleware\RequireModule;
+use App\Http\Middleware\RequirePermission;
+use App\Http\Middleware\ResolveTenant;
+use App\Http\Middleware\SuperAdmin;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -14,11 +19,13 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'tenant' => \App\Http\Middleware\ResolveTenant::class,
-            'module' => \App\Http\Middleware\RequireModule::class,
-            'perm' => \App\Http\Middleware\RequirePermission::class,
-            'super' => \App\Http\Middleware\SuperAdmin::class,
+            'tenant' => ResolveTenant::class,
+            'module' => RequireModule::class,
+            'perm' => RequirePermission::class,
+            'super' => SuperAdmin::class,
         ]);
+        // Resolve the tenant before route-model binding so bound models get the tenant scope.
+        $middleware->prependToPriorityList(SubstituteBindings::class, ResolveTenant::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

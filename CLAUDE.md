@@ -3,8 +3,8 @@
 Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): marketing home → plans → sign-up creates a tenant (a "CRM account") with an Owner user, a minimal core CRM, installable add-ons, and a public service website per tenant that grows from content added in the dashboard. A super admin portal manages all accounts.
 
 ## Stack
-- `apps/api` — Laravel 13 / PHP 8.5, Sanctum bearer tokens, SQLite locally (`database/database.sqlite`). `php artisan serve` → :8000.
-- `apps/web` — Next.js 16 App Router + Tailwind v4, React 19. `npm run dev` → :3000; `/api/*` is rewritten to the API (`API_URL`). Read `apps/web/AGENTS.md`: this Next.js has breaking changes; check `node_modules/next/dist/docs/` before using unfamiliar APIs.
+- `apps/api` — Laravel 13 / PHP 8.5, Sanctum bearer tokens, SQLite locally (`database/database.sqlite`). `php artisan serve --port=8010` → :8010 (8000/3000 are used by ShopLagbe locally).
+- `apps/web` — Next.js 16 App Router + Tailwind v4, React 19. `npm run dev -- --port 3010` → :3010; `/api/*` is rewritten to the API (`API_URL`). Read `apps/web/AGENTS.md`: this Next.js has breaking changes; check `node_modules/next/dist/docs/` before using unfamiliar APIs.
 - Run both: `./pandacode-run.sh`.
 
 ## Commands
