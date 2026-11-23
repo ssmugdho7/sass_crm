@@ -15,7 +15,7 @@ class ResolveTenant
         abort_if($user->status !== 'active', 403, 'Your account is disabled.');
         $tenant = $user->tenant;
         abort_if(! $tenant->isAccessible(), 402, 'Subscription inactive. Contact support.');
-        CurrentTenant::set($tenant);
+        CurrentTenant::set($tenant->forgetModules());
         try {
             return $next($request);
         } finally {

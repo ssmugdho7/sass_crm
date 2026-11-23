@@ -15,12 +15,13 @@ export function Shell({ brand, items, children }: { brand: React.ReactNode; item
 
   return (
     <div className="flex min-h-screen">
+      {open && <div className="fixed inset-0 z-30 bg-slate-900/40 md:hidden" onClick={() => setOpen(false)} aria-hidden />}
       <aside className={cx("fixed inset-y-0 left-0 z-40 w-64 flex-col border-r border-slate-200 bg-white md:flex", open ? "flex" : "hidden")}>
         <div className="border-b border-slate-100 px-5 py-4">{brand}</div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {items.map((i) => (
             <Link key={i.href} href={i.href} onClick={() => setOpen(false)}
-              className={cx("block rounded-lg px-3 py-2 text-sm font-medium", active(i.href) ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100")}>
+              className={cx("block rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500", active(i.href) ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100")}>
               {i.label}
             </Link>
           ))}
@@ -28,15 +29,15 @@ export function Shell({ brand, items, children }: { brand: React.ReactNode; item
         <div className="border-t border-slate-100 p-4 text-sm">
           <p className="font-medium text-slate-900">{me.name}</p>
           <p className="truncate text-slate-500">{me.email}</p>
-          <button onClick={logout} className="mt-2 text-brand-700 hover:underline">Sign out</button>
+          <button onClick={logout} className="mt-2 rounded text-brand-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">Sign out</button>
         </div>
       </aside>
-      <div className="flex-1 md:pl-64">
+      <div className="min-w-0 flex-1 md:pl-64">
         <header className="sticky top-0 z-30 flex items-center border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-          <button onClick={() => setOpen(!open)} aria-label="Menu" className="mr-3 text-xl">☰</button>
+          <button onClick={() => setOpen(!open)} aria-label="Menu" aria-expanded={open} className="mr-3 flex h-10 w-10 items-center justify-center rounded-lg text-xl hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">☰</button>
           {brand}
         </header>
-        <main className="mx-auto max-w-7xl p-4 md:p-8">{children}</main>
+        <main className="mx-auto min-w-0 max-w-7xl p-4 md:p-8">{children}</main>
       </div>
     </div>
   );

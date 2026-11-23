@@ -5,14 +5,15 @@ import { ApiError } from "@/lib/api";
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
-export function Button({ variant = "primary", className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "ghost" }) {
+export function Button({ variant = "primary", className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "danger-ghost" | "ghost" }) {
   const v = {
     primary: "bg-brand-600 text-white hover:bg-brand-700",
     secondary: "bg-white text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50",
     danger: "bg-red-600 text-white hover:bg-red-700",
+    "danger-ghost": "text-red-700 ring-1 ring-red-200 hover:bg-red-50",
     ghost: "text-slate-700 hover:bg-slate-100",
   }[variant];
-  return <button {...p} className={cx("inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition disabled:opacity-50", v, className)} />;
+  return <button {...p} className={cx("inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50", v, className)} />;
 }
 
 export function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
@@ -47,11 +48,11 @@ export function Card({ title, actions, className, children }: { title?: string; 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
+      <div className="min-w-0">
         <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
-      {actions && <div className="flex gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }
@@ -64,7 +65,7 @@ const tones: Record<string, string> = {
   gray: "bg-slate-100 text-slate-700 ring-slate-200",
 };
 export const Badge = ({ tone = "gray", children }: { tone?: keyof typeof tones | string; children: React.ReactNode }) => (
-  <span className={cx("inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1", tones[tone] ?? tones.gray)}>{children}</span>
+  <span className={cx("inline-flex shrink-0 items-center self-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ring-1", tones[tone] ?? tones.gray)}>{children}</span>
 );
 
 /** Simple data table. columns: [header, render(row)]. */
@@ -95,7 +96,7 @@ export function Modal({ open, title, onClose, children }: { open: boolean; title
       <div role="dialog" aria-modal className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <header className="flex items-center justify-between border-b px-5 py-3">
           <h2 className="font-semibold">{title}</h2>
-          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-700">✕</button>
+          <button onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">✕</button>
         </header>
         <div className="p-5">{children}</div>
       </div>

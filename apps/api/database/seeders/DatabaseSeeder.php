@@ -4,21 +4,16 @@ namespace Database\Seeders;
 
 use App\Domains\Crm\Database\DemoSeeder;
 use App\Domains\Identity\Actions\RegisterTenant;
-use App\Models\Module;
 use App\Models\Plan;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        foreach (config('crm_modules') as $key => $m) {
-            Module::updateOrCreate(['key' => $key], [
-                'name' => $m['name'], 'category' => $m['category'], 'description' => $m['description'],
-                'is_core' => $m['core'], 'price_monthly' => $m['price'],
-            ]);
-        }
+        $this->command?->callSilent('modules:sync') ?? Artisan::call('modules:sync');
 
         $plans = [
             ['name' => 'Starter', 'slug' => 'starter', 'price_monthly' => 2900, 'price_yearly' => 29000, 'max_users' => 3, 'sort' => 1, 'included_modules' => [],

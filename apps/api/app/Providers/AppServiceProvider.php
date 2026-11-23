@@ -11,7 +11,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        foreach (glob(app_path('Domains/*/*ServiceProvider.php')) as $file) {
+            $domain = basename(dirname($file));
+            $this->app->register('App\\Domains\\'.$domain.'\\'.basename($file, '.php'));
+        }
     }
 
     /**

@@ -60,4 +60,20 @@ export const platform = <T = unknown>(path: string, opts: { method?: string; bod
 export const can = (me: Me | null, perm: string) => !!me && (me.permissions.includes("*") || me.permissions.includes(perm));
 export const hasModule = (me: Me | null, key: string) => !!me?.tenant?.modules.includes(key);
 export const money = (cents: number, currency = "USD") =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency }).format((cents ?? 0) / 100);
+  new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: (cents ?? 0) % 100 === 0 ? 0 : 2 }).format((cents ?? 0) / 100);
+
+/** Dollars input string → integer cents (null when blank). */
+export const toCents = (dollars: string): number | null => {
+  if (dollars.trim() === "") return null;
+  const n = Math.round(parseFloat(dollars) * 100);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
+};
+export const toDollars = (cents: number | null | undefined) => (cents == null ? "" : (cents / 100).toFixed(2));
+
+/** One date format everywhere: "Dec 7, 2026". Accepts ISO date/datetime strings. */
+export const formatDate = (value: string | null | undefined, withTime = false) => {
+  if (!value) return "—";
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}) });
+};

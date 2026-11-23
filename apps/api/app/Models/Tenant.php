@@ -35,13 +35,29 @@ class Tenant extends Model
         return $this->hasMany(TenantModule::class)->withoutGlobalScope('tenant');
     }
 
-    /** Keys of every module this tenant can use: core + active installed add-ons. */
+    private ?array $enabledKeys = null;
+
+    /** Keys of every module this tenant can use: core + installed add-ons the platform still offers. Memoised per instance. */
     public function enabledModuleKeys(): array
     {
-        $core = collect(config('crm_modules'))->filter(fn ($m) => $m['core'])->keys();
-        $installed = $this->modules()->where('status', 'active')->pluck('module_key');
+        if ($this->enabledKeys !== null) {
+            return $this->enabledKeys;
+        }
+        $catalog = collect(config('crm_modules'));
+        $core = $catalog->filter(fn ($m) => $m['core'])->keys();
+        $inactive = Module::where('is_active', false)->pluck('key')->all();
+        $installed = $this->modules()->where('status', 'active')->pluck('module_key')
+            ->filter(fn ($k) => $catalog->has($k) && ! in_array($k, $inactive, true));
 
-        return $core->merge($installed)->unique()->values()->all();
+        return $this->enabledKeys = $core->merge($installed)->unique()->values()->all();
+    }
+
+    /** Call after installing/uninstalling modules on an already-loaded tenant. */
+    public function forgetModules(): static
+    {
+        $this->enabledKeys = null;
+
+        return $this;
     }
 
     public function hasModule(string $key): bool
@@ -51,6 +67,10 @@ class Tenant extends Model
 
     public function isAccessible(): bool
     {
-        return ! in_array($this->status, ['suspended', 'cancelled'], true);
+        if (in_array($this->status, ['suspended', 'cancelled'], true)) {
+            return false;
+        }
+
+        return ! ($this->status === 'trial' && $this->trial_ends_at?->isPast());
     }
 }
