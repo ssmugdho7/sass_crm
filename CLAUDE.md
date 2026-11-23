@@ -14,6 +14,7 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
 
 ## Backend rules
 - Domain modules live in `app/Domains/{Name}/` with their own `routes.php` (auto-loaded by `routes/api.php` under `/api`), `Http/` controllers, `Actions/`, `Models/` for domain-only models.
+- Domain migrations go in `app/Domains/{Name}/Database/Migrations/` (auto-loaded). Demo data: `app/Domains/{Name}/Database/DemoSeeder.php` (idempotent, scoped to tenant slug `demo-builders`); the architect wires it into DatabaseSeeder.
 - Shared models in `app/Models`: Tenant, User, Role, Plan, Module, TenantModule, Customer, Lead, Project, Task, Estimate, Invoice, Payment. Do not change shared migrations; add new migrations for new tables/columns.
 - Multi-tenancy: every tenant-owned table has `tenant_id`; its model uses `App\Support\Tenancy\BelongsToTenant` (global scope `tenant` + auto-stamp). Never bypass the scope in tenant routes. Platform/super-admin and public code use `withoutGlobalScope('tenant')` explicitly and filter by tenant themselves.
 - Route groups:
@@ -23,7 +24,6 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
 - Module catalog = `config/crm_modules.php` (seeded into `modules`). Core modules are always on; add-ons are rows in `tenant_modules` (`status`, encrypted `config`). `Tenant::hasModule($key)`.
 - Money is integer cents everywhere. Recording an invoice payment goes only through `App\Domains\Sales\Actions\RecordPayment`.
 - Controllers stay thin: validate → model/Action → JSON. Return plain arrays/models or `->paginate(25)`.
-- Demo data: add `database/seeders/{Domain}DemoSeeder.php` (idempotent, scoped to the `demo-builders` tenant); the architect wires it into DatabaseSeeder.
 - Tests: `tests/Feature/{Domain}/`, `RefreshDatabase` + `$seed = true`. Login helper: POST `/api/auth/login` and use the token, or `Sanctum::actingAs($user)`.
 
 ## Frontend rules
