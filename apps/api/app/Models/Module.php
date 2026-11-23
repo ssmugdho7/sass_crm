@@ -30,6 +30,8 @@ class Module extends Model
     /** All catalog rows keyed by key, cached until a module row changes. */
     public static function catalog(): Collection
     {
-        return Cache::rememberForever('modules.catalog', fn () => static::all()->keyBy('key'));
+        $rows = Cache::rememberForever('modules.catalog', fn () => static::query()->get()->map->getAttributes()->all());
+
+        return static::hydrate($rows)->keyBy('key');
     }
 }
