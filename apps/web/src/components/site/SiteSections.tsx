@@ -67,7 +67,7 @@ export function DraftPlaceholder({ id, eyebrow, title, text, tab, cta }: { id: s
           <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{title}</h2>
           <p className="mx-auto mt-2 max-w-xl text-slate-600">{text}</p>
           <Link href={`/app/website?tab=${tab}`}
-            className="mt-5 inline-flex rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2">
+            className="mt-5 inline-flex rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)] hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2">
             {cta} →
           </Link>
           <p className="mt-3 text-xs text-slate-500">Only you see this placeholder — it is hidden on your public website.</p>
@@ -100,7 +100,7 @@ export function Hero({ site, base }: { site: PublicSite; base: string }) {
           </h1>
           {s.hero_subtitle && <p className="mt-6 text-lg leading-8 text-slate-200">{s.hero_subtitle}</p>}
           <div className="mt-10 flex flex-wrap gap-4">
-            <a href={`${base}#contact`} className="rounded-lg bg-[var(--accent)] px-6 py-3.5 font-semibold text-white shadow-lg hover:opacity-90">
+            <a href={`${base}#contact`} className="rounded-lg bg-[var(--accent)] px-6 py-3.5 font-semibold text-[var(--on-accent)] shadow-lg hover:brightness-95">
               Get a free quote
             </a>
             {site.features.booking ? (
@@ -173,7 +173,7 @@ export function Portfolio({ site, base, preview }: { site: PublicSite; base: str
               )}
             </div>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/90 via-slate-950/50 to-transparent p-5 pt-16">
-              {p.category && <span className="rounded bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-white">{p.category}</span>}
+              {p.category && <span className="rounded bg-[var(--accent)] px-2 py-0.5 text-xs font-semibold text-[var(--on-accent)]">{p.category}</span>}
               <h3 className="mt-2 text-lg font-semibold text-white">{p.title}</h3>
               <p className="text-sm text-slate-300">{[p.location, formatDate(p.completed_on)].filter(Boolean).join(" · ")}</p>
             </div>
@@ -204,7 +204,7 @@ export function About({ site }: { site: PublicSite }) {
           <ul className="mt-8 grid gap-3 text-sm font-medium text-slate-800 sm:grid-cols-2">
             {["Free, detailed estimates", "Licensed & insured crews", "Clean, safe job sites", "Workmanship warranty"].map((t) => (
               <li key={t} className="flex items-center gap-2">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-xs text-white">✓</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent)] text-xs text-[var(--on-accent)]">✓</span>
                 {t}
               </li>
             ))}
@@ -345,8 +345,12 @@ export function Contact({ site, preview }: { site: PublicSite; preview?: boolean
 /** Applies the tenant's accent color as CSS variables for everything below. */
 export function Themed({ color, children }: { color: string; children: React.ReactNode }) {
   const accent = /^#[0-9a-fA-F]{6}$/.test(color) ? color : "#ea580c";
+  const rgb = [1, 3, 5].map((offset) => parseInt(accent.slice(offset, offset + 2), 16) / 255)
+    .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  const onAccent = luminance > 0.179 ? "#000000" : "#ffffff";
   return (
-    <div style={{ "--accent": accent, "--accent-soft": `${accent}1a` } as React.CSSProperties} className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <div style={{ "--accent": accent, "--accent-soft": `${accent}1a`, "--on-accent": onAccent } as React.CSSProperties} className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       {children}
     </div>
   );

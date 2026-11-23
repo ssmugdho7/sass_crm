@@ -59,6 +59,7 @@ class AddonCatalog
 
         return $addon + [
             'installed' => $installed?->status === 'active',
+            'pending' => $installed?->status === 'pending',
             'included_in_plan' => in_array($addon['key'], $tenant->plan?->included_modules ?? [], true),
             'configurable' => $fields !== [],
             'fields' => $fields,

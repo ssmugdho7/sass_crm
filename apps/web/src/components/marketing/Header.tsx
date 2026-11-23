@@ -28,7 +28,7 @@ export function Header() {
           <Link href="/login" className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">
             Log in
           </Link>
-          <Link href="/register" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
+          <Link href="/register" className="rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-900">
             Start free trial
           </Link>
         </div>
@@ -56,7 +56,7 @@ export function Header() {
             <Link href="/login" className="rounded-lg px-4 py-2 text-center text-sm font-medium text-slate-700 ring-1 ring-slate-300">
               Log in
             </Link>
-            <Link href="/register" className="rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white">
+            <Link href="/register" className="rounded-lg bg-brand-700 px-4 py-2 text-center text-sm font-semibold text-white">
               Start free trial
             </Link>
           </div>

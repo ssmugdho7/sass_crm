@@ -2,6 +2,7 @@
 
 namespace App\Domains\Sales\Actions;
 
+use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -16,6 +17,10 @@ class NextDocumentNumber
     public function __invoke(string $model, string $prefix, int $tenantId): string
     {
         return DB::transaction(function () use ($model, $prefix, $tenantId) {
+            // Lock an existing parent for first use, rather than taking incompatible missing-key gap locks.
+            if (! DB::table('document_sequences')->where('tenant_id', $tenantId)->where('type', $prefix)->exists()) {
+                Tenant::whereKey($tenantId)->lockForUpdate()->firstOrFail();
+            }
             $row = $this->lockRow($tenantId, $prefix);
             if (! $row) {
                 // First use: seed the counter from the highest existing number (idempotent if two requests race).

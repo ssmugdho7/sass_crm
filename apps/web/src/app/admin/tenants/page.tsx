@@ -33,7 +33,7 @@ function TenantsPage() {
           </Select>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" className="accent-brand-600" checked={pending} onChange={(e) => { setPending(e.target.checked); setPage(1); }} />
-            Plan requested only
+            Pending requests only
           </label>
         </div>
         <ErrorText error={error} />
@@ -41,7 +41,7 @@ function TenantsPage() {
           <>
             <Table
               rows={data.data}
-              empty={pending ? "No pending plan requests." : "No accounts match."}
+              empty={pending ? "No pending plan or add-on requests." : "No accounts match."}
               onRow={(t) => router.push(`/admin/tenants/${t.id}`)}
               columns={[
                 ["Account", (t) => <div><p className="font-medium text-slate-900">{t.name}</p><p className="text-xs text-slate-500">/{t.slug}</p></div>],

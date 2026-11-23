@@ -20,7 +20,7 @@ export default function SetupPage() {
       <Centered>
         <h1 className="text-2xl font-bold text-slate-900">Welcome to {me.tenant?.name ?? "BuildCRM"}, {me.name.split(" ")[0]}!</h1>
         <p className="mt-2 text-slate-600">Your account is ready. Head to the dashboard to get started.</p>
-        <Link href="/app" className="mt-6 inline-flex rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700">Go to dashboard</Link>
+        <Link href="/app" className="mt-6 inline-flex rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-900">Go to dashboard</Link>
       </Centered>
     );
   }
@@ -39,7 +39,7 @@ export default function SetupPage() {
       <ol className="mt-4 flex items-center gap-2" aria-label="Setup progress">
         {STEPS.map((s, i) => (
           <li key={s} className="flex flex-1 items-center gap-2" aria-current={i === step ? "step" : undefined}>
-            <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", i < step ? "bg-brand-600 text-white" : i === step ? "bg-brand-100 text-brand-700 ring-2 ring-brand-500" : "bg-slate-100 text-slate-500")}>
+            <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", i < step ? "bg-brand-700 text-white" : i === step ? "bg-brand-100 text-brand-700 ring-2 ring-brand-500" : "bg-slate-100 text-slate-500")}>
               {i < step ? "✓" : i + 1}
             </span>
             <span className={cx("hidden text-sm sm:inline", i === step ? "font-medium text-slate-900" : "text-slate-500")}>{s}</span>
@@ -131,7 +131,7 @@ function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promi
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Pick the add-ons you want now</h2>
-        <p className="text-sm text-slate-500">Your core CRM is ready. You can add or remove these any time from Add-ons.</p>
+        <p className="text-sm text-slate-500">Your core CRM is ready. Paid extras need approval after payment; included tools are available now.</p>
       </div>
       <ErrorText error={error} />
       <div className="grid gap-3 sm:grid-cols-2">
@@ -141,16 +141,16 @@ function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promi
             <button
               key={a.key}
               type="button"
-              disabled={a.installed}
+              disabled={a.installed || a.pending}
               onClick={() => toggle(a.key)}
               className={cx("rounded-lg border p-4 text-left transition", on ? "border-brand-500 bg-brand-50" : "border-slate-200 hover:border-slate-300", a.installed && "cursor-default")}
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="font-medium text-slate-900">{a.name}</span>
-                <span className={cx("flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs", on ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300")}>{on && "✓"}</span>
+                <span className={cx("flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs", on ? "border-brand-600 bg-brand-700 text-white" : "border-slate-300")}>{on && "✓"}</span>
               </div>
               <p className="mt-1 text-xs text-slate-600">{a.description}</p>
-              <p className="mt-2 text-xs font-medium text-slate-700">{a.installed ? "Already installed" : a.included_in_plan ? "Included in plan" : `${money(a.price_monthly)}/mo`}</p>
+              <p className="mt-2 text-xs font-medium text-slate-700">{a.installed ? "Already installed" : a.pending ? "Awaiting approval" : a.included_in_plan ? "Included in plan" : `${money(a.price_monthly)}/mo`}</p>
             </button>
           );
         })}
@@ -159,7 +159,7 @@ function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promi
         <Button variant="ghost" onClick={onBack}>← Back</Button>
         <div className="flex items-center gap-3">
           {extra > 0 && <span className="text-sm text-slate-500">+{money(extra)}/mo</span>}
-          <Button onClick={next} disabled={busy}>{busy ? "Installing…" : picked.length ? `Install ${picked.length} & continue` : "Continue without add-ons"}</Button>
+          <Button onClick={next} disabled={busy}>{busy ? "Sending…" : picked.length ? `Request ${picked.length} & continue` : "Continue without add-ons"}</Button>
         </div>
       </div>
     </div>
@@ -178,7 +178,7 @@ function WebsiteStep({ slug, onBack }: { slug: string; onBack: () => void }) {
     <div className="space-y-5 text-center">
       <div className="text-4xl" aria-hidden>🏗️</div>
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">You&apos;re all set!</h2>
+        <h2 className="text-lg font-semibold text-slate-900">Your CRM is ready</h2>
         {!site ? (
           error ? <p className="mt-1 text-sm text-slate-600">Your CRM is ready. Build your company website from the Website page.</p> : <p className="mt-1 text-sm text-slate-500">Checking your website…</p>
         ) : live ? (
@@ -194,20 +194,12 @@ function WebsiteStep({ slug, onBack }: { slug: string; onBack: () => void }) {
       </div>
       {site && !live && (
         <div className="flex flex-wrap justify-center gap-3">
-          <Link href="/app/website" className="inline-flex rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Build my website</Link>
+          <Link href="/app/website" className="inline-flex rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Build my website</Link>
           <Link href="/app/website/preview" className="inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Preview</Link>
         </div>
       )}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Link href="/app/website" className="rounded-lg border border-brand-500 bg-brand-50 p-4 text-left hover:bg-brand-100">
-          <p className="font-medium text-brand-800">{live ? "Update your website →" : "Set up your website →"}</p>
-          <p className="mt-1 text-xs text-brand-700">Add your services, photos and contact details.</p>
-        </Link>
-        <Link href="/app" className="rounded-lg border border-slate-200 p-4 text-left hover:border-slate-300">
-          <p className="font-medium text-slate-900">Go to dashboard →</p>
-          <p className="mt-1 text-xs text-slate-600">Start adding leads, customers and jobs.</p>
-        </Link>
-      </div>
+      {live && <Link href="/app/website" className="font-medium text-brand-700 hover:underline">Update your website →</Link>}
+      <Link href="/app" className="inline-flex font-medium text-brand-700 hover:underline">Go to dashboard →</Link>
       <div className="text-left"><Button variant="ghost" onClick={onBack}>← Back</Button></div>
     </div>
   );

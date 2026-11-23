@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The only way to record money against an invoice (manual entry, Stripe webhook, ...). Updates amount_paid + status.
@@ -23,15 +24,21 @@ class RecordPayment
      * With $capToBalance the amount is clamped to the balance read under the row lock; returns null (records
      * nothing) when nothing is owed or the invoice is void.
      */
-    public function __invoke(Invoice $invoice, int $amount, string $method, ?string $reference = null, bool $capToBalance = false): ?Payment
+    public function __invoke(Invoice $invoice, int $amount, string $method, ?string $reference = null, bool $capToBalance = false, bool $rejectOverpayment = false): ?Payment
     {
         $externalRef = in_array($method, self::EXTERNAL_METHODS, true) && $reference !== null && $reference !== '' ? $reference : null;
 
-        return DB::transaction(function () use ($invoice, $amount, $method, $reference, $externalRef, $capToBalance) {
+        return DB::transaction(function () use ($invoice, $amount, $method, $reference, $externalRef, $capToBalance, $rejectOverpayment) {
             // Serialises concurrent payments on this invoice; amount_paid is then updated from the locked row.
             $locked = RefreshInvoiceStatus::lock($invoice);
             if ($externalRef !== null && ($existing = $this->existing($invoice, $externalRef))) {
                 return $existing;
+            }
+            if ($rejectOverpayment) {
+                abort_if($locked->status === 'void', 422, 'Cannot record a payment on a void invoice.');
+                if ($amount > (int) $locked->total - (int) $locked->amount_paid) {
+                    throw ValidationException::withMessages(['amount' => 'The amount cannot exceed the balance due.']);
+                }
             }
             if ($capToBalance) {
                 $amount = min($amount, (int) $locked->total - (int) $locked->amount_paid);

@@ -45,4 +45,12 @@ abstract class AccountTestCase extends TestCase
             'name' => 'Someone', 'email' => $email, 'password' => 'password', 'status' => 'active',
         ]);
     }
+
+    protected function approveAddon(string $key): void
+    {
+        Sanctum::actingAs(User::where('is_super_admin', true)->firstOrFail(), ['platform']);
+        $this->putJson('/api/platform/tenants/'.$this->tenant()->id.'/modules/'.$key, ['enabled' => true])
+            ->assertOk()->assertJsonPath('status', 'active');
+        $this->actingAsOwner();
+    }
 }

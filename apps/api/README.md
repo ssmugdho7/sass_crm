@@ -1,3 +1,39 @@
+# BuildCRM API
+
+Laravel 13 API for tenant CRM accounts, platform administration, plans/add-ons, sales documents, operations, and public company websites. See the repository AGENTS.md and CLAUDE.md for application conventions.
+
+## Local development
+
+Run `./pandacode-run.sh` from the repository root. It runs pending migrations, synchronizes the module catalog, and starts the API on 8010, Next.js on 3010, the queue worker, and Laravel's scheduler. It stops for migration/catalog errors. Keep existing local data; use `php artisan migrate`, not a database reset, when updating an existing installation.
+
+Checks from this directory: `php artisan test` and `./vendor/bin/pint --dirty --format agent`. The normal suite uses isolated in-memory SQLite. `Sales/DatabaseLockingTest` additionally runs simultaneous independent clients when the test connection is MySQL, its database name ends in `_test`, and PHP pcntl is available. That test rebuilds its dedicated test database; never point tests at application data.
+
+## Billing and integrations
+
+SaaS subscription collection is manual: paid plan upgrades and billing-cycle changes create a pending request, then a platform admin confirms payment and approves it. Eligible downgrades apply immediately. Paid add-ons outside the plan remain pending until the admin enables them from the account's Modules tab; pending requests appear in the platform overview and account filter. Included or free add-ons do not need paid approval. Stripe Checkout is for the tenant's customer invoices, not platform subscription billing.
+
+Google Calendar uses tenant-specific OAuth client credentials; enable Calendar API and register the callback `${APP_URL}/api/public/google/callback` in Google Cloud. Stripe needs the tenant's keys and a signing secret for the webhook URL shown in its add-on settings. Use test-mode credentials first. Neither live integration has been connected or verified by this review.
+
+## Deployment status and requirements
+
+**Deployment is pending at the user's request until Bluehost supports Node.js.** `buildcrm.justsmartchoice.com` exists in cPanel and resolves to Bluehost. No BuildCRM application or customer database has been deployed there. Existing client sites are separate.
+
+The account has PHP 8.5 available at `/opt/cpanel/ea-php85/root/usr/bin/php`, SSH and cron, but the inspected server has no installed Node.js/Passenger runtime. Keep the Next.js frontend; static export or a jQuery rewrite is not part of the approved plan. The current production database and web-process routing still need validation when deployment resumes.
+
+The payment-reference migration cannot restore the old uniqueness constraint if valid duplicate manual references have since been recorded. A rollback may stop safely; never delete financial data to force it through.
+
+For an eventual fresh production installation:
+
+- Keep source, `.env`, storage and database files outside public document roots. Serve Laravel only through its `public` directory.
+- Install production Composer dependencies with the selected PHP binary (`composer install --no-dev --optimize-autoloader`), configure a private `.env`, generate APP_KEY once, and retain that key across releases because tenant integration secrets are encrypted with it.
+- Set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL` to the actual public API origin, and `APP_FRONTEND_URL` to the frontend origin. Configure the production database and mail transport; never use seeded demo/admin passwords for public access.
+- Run `php artisan migrate --force`, `php artisan modules:sync`, and `php artisan storage:link`. Keep storage and bootstrap/cache writable. Do not seed production with demo data.
+- Run a supported queue supervisor. For limited hosting, a non-overlapping cron-driven `queue:work --stop-when-empty` can be evaluated instead of assuming persistent processes survive.
+- Install Laravel's minute scheduler cron with the real application path and selected PHP binary: `* * * * * cd /path/to/apps/api && /opt/cpanel/ea-php85/root/usr/bin/php artisan schedule:run >> /dev/null 2>&1`. It drives hourly subscription enforcement. Do not install it until the production application/configuration exists.
+- Build and run Next.js with the actual API_URL; verify HTTPS, `/api` routing, uploads, login, tenant isolation, queue processing, scheduler, Stripe test webhook and Google OAuth before declaring production ready.
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

@@ -3,6 +3,7 @@
 namespace App\Domains\Platform\Http;
 
 use App\Models\Tenant;
+use App\Models\TenantModule;
 use App\Models\User;
 
 class OverviewController
@@ -11,10 +12,13 @@ class OverviewController
     {
         $byStatus = Tenant::query()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
 
-        $mrr = Tenant::query()->with('plan')->where('status', 'active')->whereNotNull('plan_id')->get()
-            ->sum(fn (Tenant $t) => $t->billing_cycle === 'yearly'
-                ? intdiv((int) $t->plan->price_yearly, 12)
-                : (int) $t->plan->price_monthly);
+        $mrr = Tenant::query()->join('plans', 'plans.id', '=', 'tenants.plan_id')
+            ->where('tenants.status', 'active')
+            ->select('tenants.billing_cycle', 'plans.price_monthly', 'plans.price_yearly')
+            ->selectRaw('COUNT(*) as accounts')
+            ->groupBy('tenants.billing_cycle', 'plans.price_monthly', 'plans.price_yearly')->get()
+            ->sum(fn ($group) => (int) $group->accounts * ($group->billing_cycle === 'yearly'
+                ? intdiv((int) $group->price_yearly, 12) : (int) $group->price_monthly));
 
         return [
             'tenants' => [
@@ -22,6 +26,7 @@ class OverviewController
                 'by_status' => collect(['trial', 'active', 'past_due', 'suspended', 'cancelled'])
                     ->mapWithKeys(fn ($s) => [$s => (int) ($byStatus[$s] ?? 0)]),
             ],
+            'pending_addon_requests' => TenantModule::withoutGlobalScope('tenant')->where('status', 'pending')->count(),
             'pending_plan_requests' => Tenant::query()->whereNotNull('requested_plan_id')->count(),
             'users' => User::query()->where('is_super_admin', false)->count(),
             'mrr' => $mrr,

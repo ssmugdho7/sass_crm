@@ -117,6 +117,7 @@ class GoogleCalendarTest extends TestCase
         Sanctum::actingAs(User::where('email', 'owner@demo.test')->first());
         $this->getJson('/api/app/integrations/google/status')->assertJson(['connected' => true, 'email' => 'boss@gmail.com']);
         $this->deleteJson('/api/app/integrations/google/disconnect')->assertOk();
+        Http::assertSent(fn (Request $r) => $r->url() === 'https://oauth2.googleapis.com/revoke' && $r['token'] === '1//refresh');
         $this->assertSame(0, GoogleCalendarToken::withoutGlobalScope('tenant')->count());
     }
 
@@ -232,5 +233,16 @@ class GoogleCalendarTest extends TestCase
         $link->forceFill(['tenant_id' => $this->tenant->id, 'appointment_id' => 1, 'google_event_id' => 'gev_x'])->save();
         AppointmentSaved::dispatch($this->tenant->id, 1, true);
         $this->assertSame(2, $pushed());
+    }
+
+    public function test_disconnect_keeps_connection_when_google_revocation_fails(): void
+    {
+        GoogleCalendarToken::withoutGlobalScope('tenant')->forceCreate([
+            'tenant_id' => $this->tenant->id, 'access_token' => 'test-access', 'refresh_token' => 'test-refresh',
+        ]);
+        Http::fake(['oauth2.googleapis.com/revoke' => Http::response(['error' => 'unavailable'], 503)]);
+        Sanctum::actingAs(User::where('email', 'owner@demo.test')->first());
+        $this->deleteJson('/api/app/integrations/google/disconnect')->assertServerError();
+        $this->assertSame(1, GoogleCalendarToken::withoutGlobalScope('tenant')->where('tenant_id', $this->tenant->id)->count());
     }
 }

@@ -22,7 +22,7 @@ export function SiteHeader({ site, base }: { site: PublicSite; base: string }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={s.logo_url} alt={`${site.tenant.name} logo`} className="h-9 w-auto max-w-[140px] object-contain" />
           ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-lg font-bold text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-lg font-bold text-[var(--on-accent)]">
               {site.tenant.name.charAt(0)}
             </span>
           )}
@@ -38,7 +38,7 @@ export function SiteHeader({ site, base }: { site: PublicSite; base: string }) {
           {s.phone && (
             <a href={`tel:${s.phone}`} className="hidden text-sm font-semibold text-slate-800 lg:block">{s.phone}</a>
           )}
-          <a href={`${base}#contact`} className="whitespace-nowrap rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+          <a href={`${base}#contact`} className="whitespace-nowrap rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-[var(--on-accent)] shadow-sm hover:brightness-95">
             Get a quote
           </a>
         </div>

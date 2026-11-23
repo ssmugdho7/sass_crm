@@ -20,7 +20,7 @@ class SecurityNitsTest extends AccountTestCase
         $this->accountManager();
         $this->postJson('/api/app/addons/payment_gateway/install')->assertForbidden();
         $this->deleteJson('/api/app/addons/payment_gateway')->assertForbidden();
-        $this->postJson('/api/app/addons/timesheets/install')->assertOk();
+        $this->postJson('/api/app/addons/timesheets/install')->assertAccepted();
     }
 
     public function test_uninstalling_plan_included_addon_is_refused(): void

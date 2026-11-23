@@ -56,7 +56,8 @@ class EstimatesTest extends SalesTestCase
         $inv = $this->postJson("/api/app/estimates/{$est['id']}/convert")->assertCreated()
             ->assertJsonPath('number', 'INV-0001')->assertJsonPath('status', 'draft')
             ->assertJsonPath('estimate_id', $est['id'])->assertJsonPath('total', 33179)->assertJsonPath('balance', 33179)->json();
-        $this->assertSame($est['items'], $inv['items']);
+        // JSON object key order is not preserved by every database engine.
+        $this->assertJsonStringEqualsJsonString(json_encode($est['items'], JSON_THROW_ON_ERROR), json_encode($inv['items'], JSON_THROW_ON_ERROR));
         $this->assertNotSame($est['public_token'], $inv['public_token']);
         $this->getJson("/api/app/estimates/{$est['id']}")->assertJsonPath('status', 'accepted')->assertJsonPath('invoice_id', $inv['id']);
     }

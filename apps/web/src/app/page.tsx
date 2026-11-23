@@ -68,7 +68,7 @@ export default function Home() {
                 BuildCRM runs your construction business from first enquiry to final invoice — leads, estimates, jobs, crew tasks, payments and your own company website, all in one place.
               </p>
               <div className="mt-10 flex flex-wrap gap-4">
-                <Link href="/register" className="rounded-lg bg-brand-600 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-500">
+                <Link href="/register" className="rounded-lg bg-brand-700 px-6 py-3 text-base font-semibold text-white shadow-lg shadow-brand-900/30 hover:bg-brand-900">
                   Start 14-day free trial
                 </Link>
                 <Link href="/login" className="rounded-lg px-6 py-3 text-base font-semibold text-white ring-1 ring-white/30 hover:bg-white/10">
@@ -126,7 +126,7 @@ export default function Home() {
           <ol className="mt-14 grid gap-6 md:grid-cols-4">
             {pipeline.map((p, i) => (
               <li key={p.step} className="relative rounded-2xl bg-slate-50 p-6 ring-1 ring-slate-200">
-                <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-600 text-sm font-bold text-white">{i + 1}</span>
+                <span className="grid h-9 w-9 place-items-center rounded-full bg-brand-700 text-sm font-bold text-white">{i + 1}</span>
                 <h3 className="mt-4 font-semibold text-slate-900">{p.step}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{p.text}</p>
               </li>
@@ -166,7 +166,7 @@ export default function Home() {
                 <p className="mt-2 text-sm leading-6 text-slate-600">{f.text}</p>
               </div>
             ))}
-            <div className="rounded-2xl bg-brand-600 p-6 text-white sm:col-span-2 lg:col-span-3">
+            <div className="rounded-2xl bg-brand-700 p-6 text-white sm:col-span-2 lg:col-span-3">
               <h3 className="font-semibold">Plus your own service website</h3>
               <p className="mt-2 text-sm leading-6 text-brand-50">
                 Every account gets a public website for your company. Add services and completed projects in the dashboard and it grows with your business.
@@ -225,7 +225,7 @@ export default function Home() {
         </section>
 
         {/* CTA */}
-        <section className="bg-brand-600">
+        <section className="bg-brand-700">
           <div className="mx-auto flex max-w-6xl flex-col items-center gap-6 px-4 py-16 text-center sm:px-6">
             <h2 className="text-3xl font-bold tracking-tight text-white">Ready to run a tighter ship?</h2>
             <p className="text-brand-50">Set up your company in minutes. Your first 14 days are on us.</p>

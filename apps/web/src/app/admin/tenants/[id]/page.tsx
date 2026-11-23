@@ -233,10 +233,10 @@ function AddonsTab({ tenantId, modules, onChanged }: { tenantId: number; modules
           ["Price / mo", (m) => (m.is_core ? "—" : money(m.price_monthly))],
           ["In plan", (m) => (m.included_in_plan ? <Badge tone="blue">included</Badge> : "")],
           ["Status", (m) => m.is_core ? <Badge tone="green">core</Badge>
-            : <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
+            : <Badge tone={m.status === "active" ? "green" : m.status === "pending" ? "amber" : "gray"}>{m.status}</Badge>],
           ["", (m) => !m.is_core && (
             <Button variant={m.status === "active" ? "secondary" : "primary"} className="px-3 py-1" disabled={busy === m.key} onClick={() => toggle(m)}>
-              {m.status === "active" ? "Disable" : "Enable"}
+              {m.status === "active" ? "Disable" : m.status === "pending" ? "Approve after payment" : "Enable"}
             </Button>
           )],
         ]}

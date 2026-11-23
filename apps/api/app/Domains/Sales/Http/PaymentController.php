@@ -31,7 +31,7 @@ class PaymentController extends Controller
         ], ['amount.max' => 'The amount cannot exceed the balance due.']);
         abort_if($balance <= 0, 422, 'This invoice is already paid in full.');
 
-        $payment = $record($invoice, (int) $data['amount'], $data['method'], $data['reference'] ?? null);
+        $payment = $record($invoice, (int) $data['amount'], $data['method'], $data['reference'] ?? null, rejectOverpayment: true);
 
         return response()->json(['payment' => $payment, 'invoice' => DocumentPresenter::invoice($invoice->refresh())], 201);
     }

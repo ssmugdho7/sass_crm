@@ -26,6 +26,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('document_sequences');
+        // Restore a standalone FK-supporting index before removing its composite replacement.
+        if (! Schema::hasIndex('payments', 'payments_tenant_id_rollback_index')) {
+            Schema::table('payments', fn (Blueprint $table) => $table->index('tenant_id', 'payments_tenant_id_rollback_index'));
+        }
         Schema::table('payments', function (Blueprint $table) {
             $table->dropUnique('payments_tenant_method_reference_unique');
         });

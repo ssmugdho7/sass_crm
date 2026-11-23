@@ -10,6 +10,7 @@ export type Addon = {
   price_monthly: number;
   permissions: string[];
   installed: boolean;
+  pending: boolean;
   included_in_plan: boolean;
   configurable: boolean;
   fields: AddonField[];

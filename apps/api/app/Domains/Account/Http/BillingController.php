@@ -38,7 +38,11 @@ class BillingController
             'addons' => $paidAddons,
             'addon_monthly_cost' => $paidAddons->sum('price_monthly'),
             'plans' => Plan::where('is_active', true)->orderBy('sort')
-                ->get(['id', 'name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'included_modules', 'features']),
+                ->get(['id', 'name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'included_modules', 'features'])
+                ->map(fn (Plan $plan) => $plan->toArray() + ['requires_approval' => [
+                    'monthly' => ChangePlan::requiresApproval($tenant, $plan, 'monthly'),
+                    'yearly' => ChangePlan::requiresApproval($tenant, $plan, 'yearly'),
+                ]]),
         ];
     }
 
