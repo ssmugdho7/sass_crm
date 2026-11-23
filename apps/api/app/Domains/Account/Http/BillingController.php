@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\TenantModule;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class BillingController
@@ -28,6 +29,12 @@ class BillingController
             'trial_ends_at' => $tenant->trial_ends_at,
             'current_period_end' => $tenant->current_period_end,
             'billing_cycle' => $tenant->billing_cycle,
+            'can_self_change' => $tenant->status === 'active',
+            'requested_plan' => $tenant->requested_plan_id
+                ? Plan::find($tenant->requested_plan_id)?->only(['id', 'name', 'slug', 'price_monthly', 'price_yearly'])
+                : null,
+            'requested_cycle' => $tenant->requested_cycle,
+            'plan_requested_at' => $tenant->plan_requested_at ? Carbon::parse($tenant->plan_requested_at)->toJSON() : null,
             'addons' => $paidAddons,
             'addon_monthly_cost' => $paidAddons->sum('price_monthly'),
             'plans' => Plan::where('is_active', true)->orderBy('sort')
@@ -41,8 +48,15 @@ class BillingController
             'plan' => ['required', 'string', Rule::exists('plans', 'slug')->where('is_active', true)],
             'cycle' => 'required|in:monthly,yearly',
         ]);
-        $change(CurrentTenant::get(), Plan::where('slug', $data['plan'])->firstOrFail(), $data['cycle']);
+        $result = $change(CurrentTenant::get(), Plan::where('slug', $data['plan'])->firstOrFail(), $data['cycle']);
+        CurrentTenant::get()->refresh()->forgetModules();
 
-        return $this->show();
+        if ($result === 'requested') {
+            return response()->json([
+                'message' => 'Plan change requested. The BuildCRM team will confirm activation after payment.',
+            ] + $this->show(), 202);
+        }
+
+        return ['message' => 'Your plan has been changed.'] + $this->show();
     }
 }

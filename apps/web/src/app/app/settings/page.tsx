@@ -14,7 +14,7 @@ export default function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <PageHeader title="Settings" subtitle="Your company details and personal profile." />
-      <CompanyCard editable={can(me, "team.manage")} />
+      <CompanyCard editable={can(me, "account.manage")} />
       {me && <ProfileCard key={me.id} />}
     </div>
   );

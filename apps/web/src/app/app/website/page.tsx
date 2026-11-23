@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { crm } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Spinner, Textarea, fieldError } from "@/components/ui";
+import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Spinner, Textarea, fieldError } from "@/components/ui";
 import type { SiteSettings } from "@/components/site/types";
 import { CollectionEditor, ImageInput, priceLabel } from "./editors";
 
@@ -33,6 +33,9 @@ const ITEM_TAB: Record<string, Tab> = {
 };
 const itemTab = (i: ChecklistItem): Tab => (isTab(i.tab) ? i.tab : ITEM_TAB[i.key] ?? "branding");
 
+// Publishing a near-empty site looks broken to visitors, so require a few basics first.
+const PUBLISH_MIN_DONE = 3;
+
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2";
 
 export default function WebsiteBuilderPage() {
@@ -44,6 +47,7 @@ export default function WebsiteBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   const set = <K extends keyof SiteSettings>(k: K, v: SiteSettings[K]) => {
@@ -82,6 +86,18 @@ export default function WebsiteBuilderPage() {
   if (error) return <ErrorText error={error} />;
   if (!settings) return <Spinner />;
 
+  const doneCount = checklist?.done ?? 0;
+  const canPublish = !!checklist && doneCount >= PUBLISH_MIN_DONE;
+  const publishBlocker = !checklist
+    ? "Checking your website…"
+    : canPublish
+      ? null
+      : `Complete at least ${PUBLISH_MIN_DONE} checklist steps before publishing (${doneCount}/${PUBLISH_MIN_DONE} done).`;
+  const unpublish = async () => {
+    await save({ published: false });
+    setConfirmUnpublish(false);
+  };
+
   const settingsTab = ["branding", "hero", "contact"].includes(tab);
   const [, tabLabel, anchor] = TABS.find(([k]) => k === tab)!;
 
@@ -92,18 +108,54 @@ export default function WebsiteBuilderPage() {
         subtitle="Your public company website grows from the content you add here."
         actions={
           <>
-            <Button variant={settings.published ? "secondary" : "primary"} disabled={saving} onClick={() => save({ published: !settings.published })}>
-              {settings.published ? "Unpublish" : "Publish site"}
-            </Button>
-            {liveUrl && (
-              <a href={liveUrl} target="_blank" rel="noopener noreferrer"
-                className={`inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 ${focusRing}`}>
-                View live site ↗
-              </a>
+            <Link href="/app/website/preview"
+              className={`inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 ${focusRing}`}>
+              Preview
+            </Link>
+            {settings.published ? (
+              <>
+                <Button variant="secondary" disabled={saving} onClick={() => setConfirmUnpublish(true)}>Unpublish</Button>
+                {liveUrl && (
+                  <a href={liveUrl} target="_blank" rel="noopener noreferrer"
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 ${focusRing}`}>
+                    View live site ↗
+                  </a>
+                )}
+              </>
+            ) : (
+              <Button disabled={saving || !canPublish} title={publishBlocker ?? undefined} aria-describedby="publish-hint" onClick={() => save({ published: true })}>
+                {saving ? "Publishing…" : "Publish website"}
+              </Button>
             )}
           </>
         }
       />
+
+      {!settings.published && (
+        <div role="status" className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Badge tone="amber">draft</Badge>
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="font-semibold text-amber-900">Draft — not visible to visitors yet</p>
+            <p id="publish-hint" className="mt-0.5 text-amber-800">
+              {publishBlocker ?? "Looking good! Preview it, then publish when you're ready for visitors."}
+            </p>
+          </div>
+        </div>
+      )}
+      {/* Settings tabs show save errors in their footer; surface publish errors everywhere else. */}
+      {!settingsTab && !confirmUnpublish && <ErrorText error={saveError} />}
+
+      <Modal open={confirmUnpublish} title="Unpublish your website?" onClose={() => setConfirmUnpublish(false)}>
+        <p className="text-sm text-slate-600">
+          Your website will go offline for visitors and search engines, and the quote form will stop collecting leads.
+          Your content is kept — you can publish again at any time.
+        </p>
+        <ErrorText error={saveError} />
+        <div className="mt-5 flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setConfirmUnpublish(false)}>Keep it live</Button>
+          <Button variant="danger" disabled={saving} onClick={unpublish}>{saving ? "Unpublishing…" : "Unpublish"}</Button>
+        </div>
+      </Modal>
 
       <ProgressCard checklist={checklist} published={settings.published} url={liveUrl} onPick={(i) => goTo(itemTab(i))} />
 
@@ -121,10 +173,10 @@ export default function WebsiteBuilderPage() {
             <p className="text-slate-500">
               {tabLabel} appears on your public website{settings.published ? "" : " once you publish it"}.
             </p>
-            <a href={`${liveUrl}${anchor ? `#${anchor}` : ""}`} target="_blank" rel="noopener noreferrer"
+            <Link href={`/app/website/preview${anchor ? `#${anchor}` : ""}`}
               className={`rounded font-medium text-brand-700 hover:underline ${focusRing}`}>
-              Preview on site ↗
-            </a>
+              Preview this section →
+            </Link>
           </div>
         )}
       </div>
@@ -208,10 +260,10 @@ function ProgressCard({ checklist, published, url, onPick }: { checklist: Checkl
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="font-semibold text-slate-900">Website completion</h2>
-            <Badge tone={published ? "green" : "amber"}>{published ? "Live" : "Unpublished"}</Badge>
+            <Badge tone={published ? "green" : "amber"}>{published ? "live" : "draft"}</Badge>
           </div>
           <p className="mt-1 text-sm text-slate-600">Every service, project and review you add here appears on your public website.</p>
-          {url && <p className="mt-1 break-all font-mono text-xs text-slate-400">{url}</p>}
+          {url && <p className="mt-1 break-all font-mono text-xs text-slate-500">{url}</p>}
         </div>
         <p className="shrink-0 text-right">
           <span className="block text-3xl font-bold text-brand-600">{percent}%</span>
@@ -301,7 +353,7 @@ function BrandingForm({ s, set, err }: FormProps) {
             <Textarea value={s.seo_description ?? ""} maxLength={500} onChange={(e) => set("seo_description", e.target.value)} />
           </Field>
           <div className="rounded-lg border border-slate-200 p-3">
-            <p className="text-xs text-slate-400">Search preview</p>
+            <p className="text-xs text-slate-500">Search preview</p>
             <p className="mt-1 truncate text-lg text-blue-700">{s.seo_title || "Your company name"}</p>
             <p className="line-clamp-2 text-sm text-slate-600">{s.seo_description || "Add a description to tell searchers what you do and where."}</p>
           </div>
@@ -373,10 +425,10 @@ function ContactForm({ s, set, err }: FormProps) {
             {areas.map((a) => (
               <li key={a} className="inline-flex max-w-full items-center break-all gap-1 rounded-full bg-slate-100 py-1 pl-3 pr-1 text-sm text-slate-700">
                 {a}
-                <button type="button" aria-label={`Remove ${a}`} onClick={() => set("service_areas", areas.filter((x) => x !== a))} className={`rounded-full px-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 ${focusRing}`}>✕</button>
+                <button type="button" aria-label={`Remove ${a}`} onClick={() => set("service_areas", areas.filter((x) => x !== a))} className={`rounded-full px-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 ${focusRing}`}>✕</button>
               </li>
             ))}
-            {!areas.length && <li className="text-sm text-slate-400">No areas yet.</li>}
+            {!areas.length && <li className="text-sm text-slate-500">No areas yet.</li>}
           </ul>
         </Card>
         <Card title="Social links">

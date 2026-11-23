@@ -24,25 +24,29 @@ class PublicSiteController
         return $tenant;
     }
 
-    private function scoped(string $class, Tenant $tenant)
-    {
-        return $class::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id);
-    }
-
     public function show(string $slug, EnsureSiteSettings $ensure)
     {
         $tenant = $this->tenant($slug);
         $settings = $ensure($tenant);
         abort_unless($settings->published, 404, 'Site not found.');
 
+        return self::payload($tenant, $settings);
+    }
+
+    /**
+     * The public site payload (published content only, no internals). Shared with the owner preview,
+     * which calls it regardless of the `published` flag.
+     */
+    public static function payload(Tenant $tenant, SiteSetting $settings): array
+    {
         $hidden = ['tenant_id', 'created_at', 'updated_at'];
-        $get = fn (string $class, bool $publishable = true) => $this->scoped($class, $tenant)
+        $get = fn (string $class, bool $publishable = true) => $class::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)
             ->when($publishable, fn ($q) => $q->where('is_published', true))
             ->orderBy('sort')->orderBy('id')->get()->makeHidden($hidden);
 
         return [
             'tenant' => ['name' => $tenant->name, 'slug' => $tenant->slug],
-            'settings' => $settings->makeHidden([...$hidden, 'id']),
+            'settings' => (clone $settings)->makeHidden([...$hidden, 'id']),
             'services' => $get(SiteService::class),
             'portfolio' => $get(SitePortfolio::class)->makeHidden('project_id'),
             'testimonials' => $get(SiteTestimonial::class),
@@ -55,7 +59,7 @@ class PublicSiteController
     public function lead(Request $request, string $slug)
     {
         $tenant = $this->tenant($slug);
-        abort_unless(SiteSetting::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->value('published') ?? true, 404, 'Site not found.');
+        abort_unless(SiteSetting::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->value('published') ?? false, 404, 'Site not found.');
 
         $data = $request->validate([
             'name' => 'required|string|max:255',

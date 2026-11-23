@@ -6,7 +6,7 @@ import { can, money } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Input, Modal, PageHeader, Select, Spinner, Table } from "@/components/ui";
-import { MobileList, PROJECT_STATUSES, Pager, dateRange, label, tone, useDebounced, type Page, type Project } from "./_crm/shared";
+import { ListEmpty, MobileList, PROJECT_STATUSES, Pager, dateRange, label, tone, useDebounced, type Page, type Project } from "./_crm/shared";
 import { ProjectForm } from "./_crm/forms";
 
 function ProjectsPage() {
@@ -33,11 +33,20 @@ function ProjectsPage() {
           </Select>
         </div>
         <ErrorText error={error} />
-        {!data ? !error && <Spinner /> : (
+        {!data ? !error && <Spinner /> : data.data.length === 0 ? (
+          <ListEmpty
+            filtered={!!(q || status)}
+            noun="projects"
+            onClear={() => { setSearch(""); setStatus(""); setPage(1); }}
+            icon="🏗️"
+            title="No projects yet"
+            hint="Create a project for each job to track its budget, dates, tasks and invoices."
+            action={manage && <Button onClick={() => setCreating(true)}>+ Create a project</Button>}
+          />
+        ) : (
           <>
             <MobileList
               rows={data.data}
-              empty="No projects match."
               onRow={(p) => router.push(`/app/projects/${p.id}`)}
               render={(p) => (
                 <div className="space-y-1">
@@ -46,7 +55,7 @@ function ProjectsPage() {
                       <p className="truncate font-medium text-slate-900">{p.name}</p>
                       <p className="truncate text-xs text-slate-500">{[p.customer?.name, p.site_address].filter(Boolean).join(" · ") || "—"}</p>
                     </div>
-                    <Badge tone={tone(p.status)}>{label(p.status)}</Badge>
+                    <Badge tone={tone(p.status)}>{p.status}</Badge>
                   </div>
                   <p className="text-xs text-slate-500">{money(p.budget)} · {dateRange(p.start_date, p.due_date)} · {p.open_tasks_count ?? 0} open tasks</p>
                 </div>
@@ -55,7 +64,6 @@ function ProjectsPage() {
             <div className="hidden sm:block">
               <Table
                 rows={data.data}
-                empty="No projects match."
                 onRow={(p) => router.push(`/app/projects/${p.id}`)}
                 columns={[
                   ["Project", (p) => (
@@ -65,7 +73,7 @@ function ProjectsPage() {
                     </div>
                   )],
                   ["Customer", (p) => p.customer?.name ?? "—"],
-                  ["Status", (p) => <Badge tone={tone(p.status)}>{label(p.status)}</Badge>],
+                  ["Status", (p) => <Badge tone={tone(p.status)}>{p.status}</Badge>],
                   ["Dates", (p) => <span className="whitespace-nowrap">{dateRange(p.start_date, p.due_date)}</span>],
                   ["Budget", (p) => money(p.budget)],
                   ["Manager", (p) => p.manager?.name ?? "—"],

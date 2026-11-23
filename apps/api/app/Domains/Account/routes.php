@@ -26,7 +26,8 @@ Route::middleware(['auth:sanctum', 'tenant'])->prefix('app')->group(function () 
         });
     });
 
-    Route::middleware('perm:team.manage')->group(function () {
+    // Billing, add-ons (incl. payment secrets) and the company profile need account.manage, not just team.manage.
+    Route::middleware('perm:account.manage')->group(function () {
         Route::get('addons', [AddonController::class, 'index']);
         Route::get('addons/{key}', [AddonController::class, 'show']);
         Route::post('addons/{key}/install', [AddonController::class, 'install']);

@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 
 class CustomerController
 {
-    use TenantRules;
+    use PaginatesRequests;
 
     public function index(Request $request)
     {

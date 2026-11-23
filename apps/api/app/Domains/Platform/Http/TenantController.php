@@ -2,6 +2,7 @@
 
 namespace App\Domains\Platform\Http;
 
+use App\Domains\Platform\Actions\DeleteTenant;
 use App\Domains\Platform\PermissionCatalog;
 use App\Models\Module;
 use App\Models\Role;
@@ -9,7 +10,6 @@ use App\Models\Tenant;
 use App\Models\TenantModule;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class TenantController
@@ -87,17 +87,10 @@ class TenantController
         return ['module_key' => $key, 'status' => $row->status];
     }
 
-    public function destroy(Tenant $tenant)
+    public function destroy(Tenant $tenant, DeleteTenant $deleteTenant)
     {
-        DB::transaction(function () use ($tenant) {
-            $userIds = User::query()->where('tenant_id', $tenant->id)->pluck('id');
-            DB::table('personal_access_tokens')->where('tokenable_type', User::class)->whereIn('tokenable_id', $userIds)->delete();
-            TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->delete();
-            User::query()->where('tenant_id', $tenant->id)->delete();
-            Role::query()->where('tenant_id', $tenant->id)->delete();
-            $tenant->delete();
-        });
+        $deleteTenant->handle($tenant);
 
-        return response()->noContent();
+        return response()->json(['status' => 'scheduled'], 202);
     }
 }

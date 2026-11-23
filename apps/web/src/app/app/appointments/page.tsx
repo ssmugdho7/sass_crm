@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { crm, can, formatDate } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
 import { addDays, dayHeader, idOrNull, localDateTime, startOfWeek, timeOf as time, useLookups, ymd } from "./_ops/shared";
 
 type Appointment = {
@@ -53,9 +53,16 @@ export default function AppointmentsPage() {
   const [saving, setSaving] = useState(false);
 
   const to = `${ymd(addDays(week, 6))} 23:59:59`;
-  const { data, error: loadError, reload: load } = useFetch<{ data: Appointment[] }>(`/app/appointments?from=${ymd(week)}&to=${encodeURIComponent(to)}`);
+  const { data, error: loadError, reload: reloadRange } = useFetch<{ data: Appointment[] }>(`/app/appointments?from=${ymd(week)}&to=${encodeURIComponent(to)}`);
   const rows = useMemo(() => data?.data ?? (loadError ? [] : null), [data, loadError]);
   const error = actionError ?? loadError;
+  // First-run probe: does the account have any appointments at all (not just this week)?
+  const { data: allData, reload: reloadAll } = useFetch<{ data: Appointment[] }>(rows?.length === 0 ? "/app/appointments?page=1" : null);
+  const firstRun = allData !== null && allData.data.length === 0 && rows?.length === 0;
+  const load = () => {
+    reloadRange();
+    reloadAll();
+  };
 
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(week, i)), [week]);
   const byDay = useMemo(() => {
@@ -173,6 +180,15 @@ export default function AppointmentsPage() {
       <ErrorText error={error} />
       {rows === null ? (
         <Spinner />
+      ) : firstRun ? (
+        <Card>
+          <EmptyState
+            icon="📅"
+            title="No appointments yet"
+            hint="Schedule site visits and consultations here. Booking requests from your website show up too."
+            action={manage && <Button onClick={() => open("new")}>New appointment</Button>}
+          />
+        </Card>
       ) : view === "week" ? (
         <>
           <div className="hidden gap-3 md:grid md:grid-cols-7">

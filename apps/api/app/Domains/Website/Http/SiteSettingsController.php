@@ -64,6 +64,14 @@ class SiteSettingsController
         return $checklist($ensure(CurrentTenant::get()));
     }
 
+    /** Owner preview: same shape as the public payload, served whether or not the site is published. */
+    public function preview(EnsureSiteSettings $ensure)
+    {
+        $tenant = CurrentTenant::get();
+
+        return PublicSiteController::payload($tenant, $ensure($tenant));
+    }
+
     public function upload(Request $request)
     {
         $request->validate(['file' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120']);

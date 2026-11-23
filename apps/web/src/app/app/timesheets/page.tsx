@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { crm, can, formatDate, money, toCents } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Input, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
 import { addDays, idOrNull, startOfWeek, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
 
 type Entry = {
@@ -44,11 +44,16 @@ export default function TimesheetsPage() {
   const reload = () => {
     list.reload();
     sum.reload();
+    probe.reload();
   };
   const [actionError, setActionError] = useState<unknown>(null);
   const error = actionError ?? list.error ?? sum.error;
   const entries = useMemo(() => list.data?.data ?? (list.error ? [] : null), [list.data, list.error]);
   const summary = sum.data;
+  // First-run: nothing this week and no filters → check whether any entries exist at all.
+  const unfiltered = !filters.user_id && !filters.project_id;
+  const probe = useFetch<Paginated<Entry>>(unfiltered && entries?.length === 0 ? "/app/timesheets" : null);
+  const firstRun = unfiltered && entries?.length === 0 && probe.data !== null && probe.data.data.length === 0;
 
   const blank = { work_date: ymd(new Date()), hours: "", project_id: "", user_id: "", hourly_rate: "", notes: "" };
   const [form, setForm] = useState(blank);
@@ -80,7 +85,7 @@ export default function TimesheetsPage() {
       await crm("/app/timesheets", {
         body: {
           work_date: form.work_date, hours: Number(form.hours), project_id: idOrNull(form.project_id),
-          user_id: isManager ? idOrNull(form.user_id) : null, hourly_rate: toCents(form.hourly_rate), notes: form.notes || null,
+          user_id: isManager ? idOrNull(form.user_id) : null, ...(isManager ? { hourly_rate: toCents(form.hourly_rate) } : {}), notes: form.notes || null,
         },
       });
       setForm({ ...blank, work_date: form.work_date, project_id: form.project_id, hourly_rate: form.hourly_rate });
@@ -149,7 +154,7 @@ export default function TimesheetsPage() {
         <Card title="Log hours" className="mb-6">
           <form onSubmit={submit} className="grid items-end gap-3 sm:grid-cols-2 md:grid-cols-6">
             <Field label="Date" error={fieldError(formError, "work_date")}><Input type="date" value={form.work_date} onChange={(e) => setForm({ ...form, work_date: e.target.value })} required /></Field>
-            <Field label="Hours" error={fieldError(formError, "hours")}><Input type="number" min="0.25" max="24" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} required /></Field>
+            <Field label="Hours" error={fieldError(formError, "hours")}><Input id="timesheet-hours" type="number" min="0.25" max="24" step="0.25" value={form.hours} onChange={(e) => setForm({ ...form, hours: e.target.value })} required /></Field>
             <Field label="Job" error={fieldError(formError, "project_id")}>
               <Select value={form.project_id} onChange={(e) => setForm({ ...form, project_id: e.target.value })}>
                 <option value="">No job</option>
@@ -166,7 +171,9 @@ export default function TimesheetsPage() {
             ) : (
               <Field label="Notes"><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
             )}
-            <Field label="Rate ($/hr)" error={fieldError(formError, "hourly_rate")}><Input type="number" min="0" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} /></Field>
+            {isManager && (
+              <Field label="Rate ($/hr)" error={fieldError(formError, "hourly_rate")}><Input type="number" min="0" step="0.01" value={form.hourly_rate} onChange={(e) => setForm({ ...form, hourly_rate: e.target.value })} /></Field>
+            )}
             <Button disabled={saving}>{saving ? "Saving…" : "Add entry"}</Button>
             {isManager && (
               <div className="sm:col-span-2 md:col-span-6"><Input placeholder="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
@@ -177,6 +184,15 @@ export default function TimesheetsPage() {
 
       {entries === null ? (
         <Spinner />
+      ) : firstRun ? (
+        <Card>
+          <EmptyState
+            icon="⏱️"
+            title="No hours logged yet"
+            hint="Log crew hours against jobs to track labour cost and approve timesheets each week."
+            action={canLog && <Button onClick={() => document.getElementById("timesheet-hours")?.focus()}>Log hours</Button>}
+          />
+        </Card>
       ) : (
         <>
           <Card title="Weekly hours" className="mb-6">

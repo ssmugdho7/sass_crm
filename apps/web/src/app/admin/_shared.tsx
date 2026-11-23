@@ -26,7 +26,7 @@ export type PermissionGroup = { key: string; name: string; core: boolean; permis
 export const TENANT_STATUSES = ["trial", "active", "past_due", "suspended", "cancelled"] as const;
 export const statusTone = (s: string) =>
   ({ active: "green", trial: "blue", past_due: "amber", suspended: "red", cancelled: "gray", disabled: "red" })[s] ?? "gray";
-export const StatusBadge = ({ status }: { status: string }) => <Badge tone={statusTone(status)}>{status.replace("_", " ")}</Badge>;
+export const StatusBadge = ({ status }: { status: string }) => <Badge tone={statusTone(status)}>{status}</Badge>;
 export function Pager({ page, last, total, onPage }: { page: number; last: number; total: number; onPage: (p: number) => void }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm text-slate-500">

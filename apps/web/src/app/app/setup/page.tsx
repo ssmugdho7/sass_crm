@@ -15,7 +15,7 @@ export default function SetupPage() {
   const [step, setStep] = useState(0);
 
   if (!me) return <Spinner />;
-  if (!can(me, "team.manage")) {
+  if (!can(me, "account.manage")) {
     return (
       <Centered>
         <h1 className="text-2xl font-bold text-slate-900">Welcome to {me.tenant?.name ?? "BuildCRM"}, {me.name.split(" ")[0]}!</h1>

@@ -45,7 +45,7 @@ Route::middleware(['auth:sanctum', 'tenant'])->prefix('app')->group(function () 
             Route::match(['put', 'patch'], 'timesheets/{timesheet}', [TimesheetController::class, 'update'])->whereNumber('timesheet');
             Route::delete('timesheets/{timesheet}', [TimesheetController::class, 'destroy'])->whereNumber('timesheet');
         });
-        Route::post('timesheets/{timesheet}/approve', [TimesheetController::class, 'approve'])->whereNumber('timesheet')->middleware('perm:team.manage');
+        Route::post('timesheets/{timesheet}/approve', [TimesheetController::class, 'approve'])->whereNumber('timesheet')->middleware(['perm:timesheets.manage', 'perm:team.manage']);
     });
 
     Route::middleware('module:expenses')->group(function () {

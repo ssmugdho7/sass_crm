@@ -3,9 +3,9 @@
 namespace App\Domains\Operations\Http;
 
 use App\Domains\Operations\Models\Appointment;
-use App\Domains\Operations\Support\TenantRules;
 use App\Events\AppointmentSaved;
 use App\Http\Controllers\Controller;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 

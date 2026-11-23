@@ -131,4 +131,27 @@ class StripePaymentsTest extends TestCase
         $send(StripeSignature::header($payload, 'whsec_abc', time() - 1000))->assertStatus(400);
         $send('garbage')->assertStatus(400);
     }
+
+    public function test_webhook_caps_amount_at_balance_and_ignores_other_currency(): void
+    {
+        $this->configure(['secret_key' => 'sk_test_123', 'webhook_secret' => 'whsec_abc', 'currency' => 'EUR']);
+        $invoice = $this->invoice(); // total 50000, paid 10000 → 40000 due
+        $send = function (array $session) use ($invoice) {
+            $payload = json_encode(['type' => 'checkout.session.completed', 'data' => ['object' => $session + [
+                'payment_status' => 'paid', 'metadata' => ['invoice_id' => (string) $invoice->id],
+            ]]]);
+            $headers = ['Stripe-Signature' => StripeSignature::header($payload, 'whsec_abc'), 'Content-Type' => 'application/json'];
+            $this->call('POST', '/api/public/stripe/webhook/demo-builders', [], [], [], $this->transformHeadersToServerVars($headers), $payload)->assertOk();
+        };
+
+        $send(['id' => 'cs_usd', 'amount_total' => 40000, 'currency' => 'usd']);
+        $this->assertSame(0, Payment::withoutGlobalScope('tenant')->where('reference', 'cs_usd')->count());
+
+        $send(['id' => 'cs_over', 'amount_total' => 90000, 'currency' => 'eur']);
+        $this->assertSame(40000, (int) Payment::withoutGlobalScope('tenant')->where('reference', 'cs_over')->value('amount'));
+        $this->assertSame(50000, (int) $invoice->refresh()->amount_paid);
+
+        $send(['id' => 'cs_late', 'amount_total' => 5000, 'currency' => 'eur']); // nothing left to pay
+        $this->assertSame(0, Payment::withoutGlobalScope('tenant')->where('reference', 'cs_late')->count());
+    }
 }

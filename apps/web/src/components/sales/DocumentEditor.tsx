@@ -141,7 +141,7 @@ export function DocumentEditor({ kind, initial, onSubmit, submitLabel, disabled 
               <div className="col-span-4 flex items-center justify-end gap-2 sm:col-span-2">
                 <span className="text-sm font-medium text-slate-800">{money(totals.lines[idx])}</span>
                 {!disabled && rows.length > 1 && (
-                  <button type="button" aria-label="Remove line" className="text-slate-400 hover:text-red-600" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>✕</button>
+                  <button type="button" aria-label="Remove line" className="text-slate-500 hover:text-red-600" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}>✕</button>
                 )}
               </div>
             </div>

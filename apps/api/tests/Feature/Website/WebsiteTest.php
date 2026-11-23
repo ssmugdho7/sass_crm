@@ -7,6 +7,7 @@ use App\Domains\Website\Database\DemoSeeder;
 use App\Domains\Website\Models\SiteService;
 use App\Models\Lead;
 use App\Models\Project;
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\CurrentTenant;
@@ -32,6 +33,13 @@ class WebsiteTest extends TestCase
         return app(RegisterTenant::class)(['company' => 'Rival Roofing', 'name' => 'Rita', 'email' => 'rita@rival.test', 'password' => 'secret123', 'plan' => 'starter'])->fresh();
     }
 
+    private function publish(User $user): void
+    {
+        $this->actAs($user);
+        $this->putJson('/api/app/website/settings', ['published' => true])->assertOk();
+        CurrentTenant::set(null);
+    }
+
     private function actAs(User $user): void
     {
         CurrentTenant::set(null);
@@ -42,7 +50,7 @@ class WebsiteTest extends TestCase
     {
         $this->actAs($this->owner());
         $this->getJson('/api/app/website/settings')->assertOk()
-            ->assertJsonPath('published', true)
+            ->assertJsonPath('published', false) // new sites start as drafts
             ->assertJsonPath('about_title', 'About Demo Builders');
 
         $this->putJson('/api/app/website/settings', [
@@ -57,6 +65,7 @@ class WebsiteTest extends TestCase
 
     public function test_public_site_is_isolated_per_tenant_and_respects_publish_toggle(): void
     {
+        $this->publish($this->owner());
         $this->actAs($this->owner());
         $this->postJson('/api/app/website/services', ['title' => 'Demo Kitchens'])->assertCreated();
         $this->postJson('/api/app/website/services', ['title' => 'Hidden draft', 'is_published' => false])->assertCreated();
@@ -74,6 +83,10 @@ class WebsiteTest extends TestCase
         $this->assertNotContains('Hidden draft', $titles);
         $this->assertArrayNotHasKey('tenant_id', $res->json('services.0'));
 
+        $this->getJson('/api/public/sites/rival-roofing')->assertNotFound(); // new sites start as drafts
+        $this->actAs(User::where('email', 'rita@rival.test')->firstOrFail());
+        $this->putJson('/api/app/website/settings', ['published' => true])->assertOk();
+        CurrentTenant::set(null);
         $this->getJson('/api/public/sites/rival-roofing')->assertOk()
             ->assertJsonPath('services.0.title', 'Rival Roofs')->assertJsonPath('features.booking', false);
         $this->getJson('/api/public/sites/nope')->assertNotFound();
@@ -87,8 +100,63 @@ class WebsiteTest extends TestCase
         $this->getJson('/api/public/sites/rival-roofing')->assertNotFound();
     }
 
+    public function test_new_tenant_site_starts_as_draft_until_published(): void
+    {
+        $rival = $this->otherOwner();
+        CurrentTenant::set(null);
+        $this->getJson('/api/public/sites/rival-roofing')->assertNotFound();
+        $this->postJson('/api/public/sites/rival-roofing/leads', ['name' => 'X', 'email' => 'x@x.test'])->assertNotFound();
+
+        $this->actAs($rival);
+        $this->getJson('/api/app/website/settings')->assertOk()->assertJsonPath('published', false)
+            ->assertJsonPath('about_title', 'About Rival Roofing');
+        $this->putJson('/api/app/website/settings', ['published' => true])->assertOk()->assertJsonPath('published', true);
+
+        CurrentTenant::set(null);
+        $this->getJson('/api/public/sites/rival-roofing')->assertOk()->assertJsonPath('tenant.slug', 'rival-roofing');
+        $this->postJson('/api/public/sites/rival-roofing/leads', ['name' => 'X', 'email' => 'x@x.test'])->assertCreated();
+    }
+
+    public function test_owner_preview_matches_public_payload_even_when_unpublished(): void
+    {
+        $this->getJson('/api/app/website/preview')->assertUnauthorized();
+        $this->publish($this->owner());
+
+        $this->actAs($this->owner());
+        $this->postJson('/api/app/website/services', ['title' => 'Previewed'])->assertCreated();
+        $this->postJson('/api/app/website/services', ['title' => 'Hidden draft', 'is_published' => false])->assertCreated();
+        CurrentTenant::set(null);
+        $public = $this->getJson('/api/public/sites/demo-builders')->assertOk()->json();
+
+        $this->actAs($this->owner());
+        $preview = $this->getJson('/api/app/website/preview')->assertOk()->json();
+        $this->assertSame(array_keys($public), array_keys($preview));
+        $this->assertSame($public['services'], $preview['services']);
+        $this->assertNotContains('Hidden draft', collect($preview['services'])->pluck('title'));
+        $this->assertArrayNotHasKey('tenant_id', $preview['settings']);
+
+        $this->putJson('/api/app/website/settings', ['published' => false])->assertOk();
+        $this->getJson('/api/app/website/preview')->assertOk()->assertJsonPath('tenant.slug', 'demo-builders')
+            ->assertJsonPath('settings.published', false);
+        CurrentTenant::set(null);
+        $this->getJson('/api/public/sites/demo-builders')->assertNotFound();
+
+        // Brand-new (draft) tenant can preview its own site, never another tenant's.
+        $this->actAs($this->otherOwner());
+        $this->getJson('/api/app/website/preview')->assertOk()->assertJsonPath('tenant.slug', 'rival-roofing')
+            ->assertJsonCount(0, 'services');
+
+        // Requires website.manage.
+        $owner = $this->owner();
+        $crew = Role::where('tenant_id', $owner->tenant_id)->where('slug', 'field-crew')->firstOrFail();
+        $this->assertNotContains('website.manage', $crew->permissions ?? []);
+        $this->actAs(User::create(['tenant_id' => $owner->tenant_id, 'role_id' => $crew->id, 'name' => 'Crew', 'email' => 'crew@demo.test', 'password' => 'password'])->fresh());
+        $this->getJson('/api/app/website/preview')->assertForbidden();
+    }
+
     public function test_lead_capture_creates_website_lead_and_honeypot_blocks_bots(): void
     {
+        $this->publish($this->owner());
         $this->postJson('/api/public/sites/demo-builders/leads', [
             'name' => 'Jane Client', 'email' => 'jane@example.test', 'service' => 'Kitchen remodel', 'message' => 'Need a quote',
         ])->assertCreated();

@@ -83,7 +83,7 @@ export default function ProjectPage() {
               <div className="flex items-start gap-3">
                 <TaskToggle task={t} disabled={!manageTasks} onChange={replaceTask} />
                 <button type="button" disabled={!manageTasks} onClick={() => setTask(t)} className="min-w-0 flex-1 text-left">
-                  <p className={t.status === "done" ? "truncate text-slate-400 line-through" : "truncate font-medium text-slate-900"}>{t.title}</p>
+                  <p className={t.status === "done" ? "truncate text-slate-500 line-through" : "truncate font-medium text-slate-900"}>{t.title}</p>
                   <p className="truncate text-xs text-slate-500">
                     <span className={isOverdue(t) ? "font-medium text-red-600" : ""}>{formatDate(t.due_date)}{isOverdue(t) && " · overdue"}</span>
                     {" · "}{t.assignee?.name ?? "Unassigned"} · {label(t.priority)}
@@ -99,7 +99,7 @@ export default function ProjectPage() {
             onRow={manageTasks ? (t) => setTask(t) : undefined}
             columns={[
               ["", (t) => <TaskToggle task={t} disabled={!manageTasks} onChange={replaceTask} />],
-              ["Task", (t) => <span className={t.status === "done" ? "text-slate-400 line-through" : "font-medium text-slate-900"}>{t.title}</span>],
+              ["Task", (t) => <span className={t.status === "done" ? "text-slate-500 line-through" : "font-medium text-slate-900"}>{t.title}</span>],
               ["Priority", (t) => <Badge tone={tone(t.priority)}>{label(t.priority)}</Badge>],
               ["Due", (t) => <span className={isOverdue(t) ? "whitespace-nowrap font-medium text-red-600" : "whitespace-nowrap"}>{formatDate(t.due_date)}</span>],
               ["Assignee", (t) => t.assignee?.name ?? "—"],

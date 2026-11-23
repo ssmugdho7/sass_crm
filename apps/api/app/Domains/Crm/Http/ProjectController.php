@@ -5,13 +5,14 @@ namespace App\Domains\Crm\Http;
 use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\Project;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class ProjectController
 {
-    use TenantRules;
+    use PaginatesRequests;
 
     public const STATUSES = ['planning', 'in_progress', 'on_hold', 'completed', 'cancelled'];
 
@@ -80,14 +81,14 @@ class ProjectController
     {
         $data = $request->validate([
             'name' => 'required|string|max:160',
-            'customer_id' => ['nullable', 'integer', $this->inTenant('customers')],
+            'customer_id' => ['nullable', 'integer', TenantRules::exists('customers')],
             'site_address' => 'nullable|string|max:255',
             'status' => 'sometimes|in:'.implode(',', self::STATUSES),
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
             'budget' => 'nullable|integer|min:0',
             'description' => 'nullable|string|max:5000',
-            'manager_id' => ['nullable', 'integer', $this->inTenant('users')],
+            'manager_id' => ['nullable', 'integer', TenantRules::exists('users')],
         ]);
         $data['budget'] = (int) ($data['budget'] ?? 0);
 

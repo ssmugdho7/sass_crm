@@ -5,6 +5,7 @@ namespace Tests\Feature\Operations;
 use App\Domains\Identity\Actions\RegisterTenant;
 use App\Domains\Operations\Database\DemoSeeder;
 use App\Domains\Operations\Models\Appointment;
+use App\Domains\Operations\Models\Timesheet;
 use App\Events\AppointmentSaved;
 use App\Models\Lead;
 use App\Models\Project;
@@ -172,6 +173,28 @@ class OperationsTest extends TestCase
 
         Sanctum::actingAs($crew);
         $this->patchJson("/api/app/timesheets/{$crewEntry}", ['hours' => 9])->assertForbidden();
+    }
+
+    public function test_hourly_rate_is_manager_only_and_approve_needs_timesheets_manage(): void
+    {
+        $owner = $this->owner();
+        $crew = $this->crew($owner);
+
+        Sanctum::actingAs($crew);
+        $id = $this->postJson('/api/app/timesheets', ['work_date' => '2026-11-20', 'hours' => 2, 'hourly_rate' => 99999])
+            ->assertCreated()->assertJsonPath('hourly_rate', null)->json('id');
+        $this->patchJson("/api/app/timesheets/{$id}", ['hourly_rate' => 50000, 'hours' => 3])->assertOk()
+            ->assertJsonPath('hourly_rate', null)->assertJsonPath('hours', 3);
+
+        Sanctum::actingAs($owner);
+        $this->patchJson("/api/app/timesheets/{$id}", ['hourly_rate' => 4500])->assertOk()->assertJsonPath('hourly_rate', 4500);
+
+        // team.manage alone is not enough to approve: timesheets.manage is required too.
+        $role = Role::create(['tenant_id' => $owner->tenant_id, 'name' => 'HR', 'slug' => 'hr', 'permissions' => ['team.view', 'team.manage', 'timesheets.view']]);
+        $hr = User::create(['tenant_id' => $owner->tenant_id, 'role_id' => $role->id, 'name' => 'HR', 'email' => 'hr'.$owner->tenant_id.'@test.test', 'password' => 'password'])->fresh();
+        Sanctum::actingAs($hr);
+        $this->postJson("/api/app/timesheets/{$id}/approve")->assertForbidden();
+        $this->assertFalse((bool) Timesheet::withoutGlobalScope('tenant')->find($id)->approved);
     }
 
     public function test_project_costing_math(): void

@@ -42,7 +42,7 @@ export function ImageInput({ value, onChange, label, error }: { value: string | 
   return (
     <Field label={label} error={err ?? error}>
       <div className="flex items-start gap-3">
-        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-400">
+        <div className="flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50 text-xs text-slate-500">
           {value ? <img src={value} alt="" className="h-full w-full object-cover" /> : "No image"}
         </div>
         <div className="min-w-0 flex-1 space-y-2">
@@ -212,8 +212,8 @@ export function CollectionEditor({ collection, title, fields, summary, empty, on
             return (
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-3 sm:flex-nowrap">
                 <div className="flex flex-col">
-                  <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▲</button>
-                  <button aria-label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▼</button>
+                  <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)} className="rounded px-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▲</button>
+                  <button aria-label="Move down" disabled={i === rows.length - 1} onClick={() => move(i, 1)} className="rounded px-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500">▼</button>
                 </div>
                 {s.image !== undefined && (
                   <div className="h-12 w-16 shrink-0 overflow-hidden rounded-md bg-slate-100">

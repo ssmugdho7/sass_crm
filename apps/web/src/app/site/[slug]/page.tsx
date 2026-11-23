@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
-import { About, Contact, Faq, Hero, Portfolio, ServiceAreas, Services, Team, Testimonials, Themed } from "@/components/site/SiteSections";
+import { SiteBody } from "@/components/site/SitePage";
 import { fetchSite } from "@/components/site/types";
 
 export const revalidate = 60;
@@ -40,21 +39,9 @@ export default async function SitePage({ params }: { params: Promise<{ slug: str
   };
 
   return (
-    <Themed color={s.theme_color}>
+    <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-      <SiteHeader site={site} base={base} />
-      <main className="flex-1">
-        <Hero site={site} base={base} />
-        <Services site={site} />
-        <About site={site} />
-        <Portfolio site={site} base={base} />
-        <Testimonials site={site} />
-        <Team site={site} />
-        <Faq site={site} />
-        <ServiceAreas site={site} />
-        <Contact site={site} />
-      </main>
-      <SiteFooter site={site} base={base} />
-    </Themed>
+      <SiteBody site={site} base={base} />
+    </>
   );
 }

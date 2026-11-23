@@ -134,13 +134,13 @@ export function Services({ site }: { site: PublicSite }) {
   );
 }
 
-export function Portfolio({ site, base }: { site: PublicSite; base: string }) {
+export function Portfolio({ site, base, preview }: { site: PublicSite; base: string; preview?: boolean }) {
   if (!site.portfolio.length) return null;
   return (
     <Section id="projects" eyebrow="Our work" title="Recent projects" intro="A few of the homes and spaces we're proud to have built.">
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {site.portfolio.map((p, i) => (
-          <Link key={p.id} href={`${base}/projects/${p.id}`}
+          <PortfolioCard key={p.id} href={preview ? null : `${base}/projects/${p.id}`}
             className={`group relative block overflow-hidden rounded-2xl bg-slate-200 ${i === 0 ? "sm:col-span-2 sm:row-span-2" : ""}`}>
             <div className={i === 0 ? "aspect-[4/3] h-full sm:aspect-auto" : "aspect-[4/3]"}>
               {p.cover_url || p.images?.[0] ? (
@@ -154,12 +154,16 @@ export function Portfolio({ site, base }: { site: PublicSite; base: string }) {
               <h3 className="mt-2 text-lg font-semibold text-white">{p.title}</h3>
               <p className="text-sm text-slate-300">{[p.location, formatDate(p.completed_on)].filter(Boolean).join(" · ")}</p>
             </div>
-          </Link>
+          </PortfolioCard>
         ))}
       </div>
     </Section>
   );
 }
+
+/** Project detail pages only exist on the live site, so the owner preview renders plain cards. */
+const PortfolioCard = ({ href, className, children }: { href: string | null; className: string; children: React.ReactNode }) =>
+  href ? <Link href={href} className={className}>{children}</Link> : <div className={className}>{children}</div>;
 
 export function About({ site }: { site: PublicSite }) {
   const s = site.settings;
@@ -200,7 +204,7 @@ export function Testimonials({ site }: { site: PublicSite }) {
             <blockquote className="mt-4 flex-1 leading-7 text-slate-200">“{t.quote}”</blockquote>
             <figcaption className="mt-6">
               <p className="font-semibold text-white">{t.author}</p>
-              {t.role && <p className="text-sm text-slate-400">{t.role}</p>}
+              {t.role && <p className="text-sm text-slate-500">{t.role}</p>}
             </figcaption>
           </figure>
         ))}
@@ -273,7 +277,7 @@ export function ServiceAreas({ site }: { site: PublicSite }) {
   );
 }
 
-export function Contact({ site }: { site: PublicSite }) {
+export function Contact({ site, preview }: { site: PublicSite; preview?: boolean }) {
   const s = site.settings;
   const rows = [
     s.phone && ["Call us", <a key="p" href={`tel:${s.phone}`} className="hover:underline">{s.phone}</a>],
@@ -303,7 +307,12 @@ export function Contact({ site }: { site: PublicSite }) {
           )}
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8 lg:col-span-3">
-          <ContactTabs slug={site.tenant.slug} services={site.services.map((x) => x.title)} booking={site.features.booking} />
+          {preview && (
+            <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Preview — the form is disabled here so no test leads are created.</p>
+          )}
+          <fieldset disabled={preview} className="disabled:opacity-70">
+            <ContactTabs slug={site.tenant.slug} services={site.services.map((x) => x.title)} booking={site.features.booking} />
+          </fieldset>
         </div>
       </div>
     </section>

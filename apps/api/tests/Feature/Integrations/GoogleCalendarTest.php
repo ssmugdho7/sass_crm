@@ -9,14 +9,16 @@ use App\Events\AppointmentSaved;
 use App\Models\Tenant;
 use App\Models\TenantModule;
 use App\Models\User;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Events\CallQueuedListener;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -174,7 +176,7 @@ class GoogleCalendarTest extends TestCase
     public function test_listener_is_queued_with_retries(): void
     {
         $listener = new SyncAppointmentToGoogle;
-        $this->assertInstanceOf(ShouldQueue::class, $listener);
+        $this->assertInstanceOf(ShouldQueueAfterCommit::class, $listener);
         $this->assertSame(3, $listener->tries);
         $this->assertSame([10, 60, 300], $listener->backoff);
     }
@@ -195,5 +197,40 @@ class GoogleCalendarTest extends TestCase
             $this->assertSame(500, $e->response->status());
         }
         $this->assertSame(0, CalendarEventLink::withoutGlobalScope('tenant')->count());
+    }
+
+    public function test_no_job_queued_without_module_or_connection(): void
+    {
+        Queue::fake();
+        $pushed = fn () => Queue::pushed(CallQueuedListener::class, fn ($job) => $job->class === SyncAppointmentToGoogle::class)->count();
+
+        // Module active but not connected to Google.
+        AppointmentSaved::dispatch($this->tenant->id, 1);
+        $this->assertSame(0, $pushed());
+
+        // Connected, but the add-on is not installed/active.
+        $this->connectToken();
+        TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $this->tenant->id)->where('module_key', 'google_calendar')->delete();
+        AppointmentSaved::dispatch(Tenant::find($this->tenant->id)->id, 1);
+        $this->assertSame(0, $pushed());
+        Queue::assertNotPushed(CallQueuedListener::class, fn ($job) => $job->class === SyncAppointmentToGoogle::class);
+    }
+
+    public function test_job_queued_when_connected_and_deletes_need_a_link(): void
+    {
+        Queue::fake();
+        $this->connectToken();
+        $pushed = fn () => Queue::pushed(CallQueuedListener::class, fn ($job) => $job->class === SyncAppointmentToGoogle::class)->count();
+
+        AppointmentSaved::dispatch($this->tenant->id, 1);
+        $this->assertSame(1, $pushed());
+
+        AppointmentSaved::dispatch($this->tenant->id, 1, true); // no linked event → nothing to delete
+        $this->assertSame(1, $pushed());
+
+        $link = new CalendarEventLink;
+        $link->forceFill(['tenant_id' => $this->tenant->id, 'appointment_id' => 1, 'google_event_id' => 'gev_x'])->save();
+        AppointmentSaved::dispatch($this->tenant->id, 1, true);
+        $this->assertSame(2, $pushed());
     }
 }

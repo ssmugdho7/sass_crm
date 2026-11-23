@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDate } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
-import { Card, ErrorText, Input, PageHeader, Select, Spinner, Table } from "@/components/ui";
+import { Card, ErrorText, Input, PageHeader, Select, Spinner, Table, statusLabel } from "@/components/ui";
 import { Pager, StatusBadge, TENANT_STATUSES, type Paginated, type Tenant } from "../_shared";
 
 export default function TenantsPage() {
@@ -23,7 +23,7 @@ export default function TenantsPage() {
           <Input className="sm:max-w-xs" placeholder="Search name, slug, email…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           <Select className="sm:max-w-[12rem]" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
             <option value="">All statuses</option>
-            {TENANT_STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+            {TENANT_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </Select>
         </div>
         <ErrorText error={error} />

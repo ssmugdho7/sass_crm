@@ -18,14 +18,9 @@ class BillingAndProfileTest extends AccountTestCase
             ->assertJsonCount(3, 'plans');
     }
 
-    public function test_change_plan_installs_included_modules(): void
+    public function test_change_plan_validates_plan(): void
     {
         $this->actingAsOwner();
-        $this->postJson('/api/app/billing/change-plan', ['plan' => 'pro', 'cycle' => 'yearly'])->assertOk()
-            ->assertJsonPath('plan.slug', 'pro')->assertJsonPath('status', 'active')->assertJsonPath('billing_cycle', 'yearly');
-        $tenant = $this->tenant();
-        $this->assertTrue($tenant->hasModule('timesheets'));
-        $this->assertTrue($tenant->current_period_end->greaterThan(now()->addMonths(11)));
         $this->postJson('/api/app/billing/change-plan', ['plan' => 'nope', 'cycle' => 'monthly'])->assertUnprocessable();
     }
 

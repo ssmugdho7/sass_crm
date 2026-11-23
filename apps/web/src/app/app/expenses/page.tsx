@@ -4,7 +4,7 @@ import { useState } from "react";
 import { crm, can, formatDate, money, toCents, toDollars } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Stat, Table, fieldError } from "@/components/ui";
 import { idOrNull, useLookups, ymd, type Paginated } from "../appointments/_ops/shared";
 
 const CATEGORIES = ["materials", "labour", "equipment", "permits", "subcontractor", "other"] as const;
@@ -190,10 +190,17 @@ export default function ExpensesPage() {
             <Table
               rows={data.data}
               onRow={open}
-              empty="No expenses recorded."
+              empty={Object.values(filters).some(Boolean) ? "No expenses match these filters." : (
+                <EmptyState
+                  icon="🧾"
+                  title="No expenses yet"
+                  hint="Record materials, equipment and other costs against jobs to see real job costing."
+                  action={manage && <Button onClick={() => open("new")}>Add expense</Button>}
+                />
+              )}
               columns={[
                 ["Date", (e) => <span className="whitespace-nowrap">{formatDate(e.expense_date.slice(0, 10))}</span>],
-                ["Job", (e) => e.project?.name ?? <span className="text-slate-400">Overhead</span>],
+                ["Job", (e) => e.project?.name ?? <span className="text-slate-500">Overhead</span>],
                 ["Category", (e) => <Badge tone={e.category === "materials" ? "blue" : e.category === "subcontractor" ? "amber" : "gray"}>{e.category}</Badge>],
                 ["Vendor", (e) => e.vendor ?? "—"],
                 ["Description", (e) => e.description ?? "—"],

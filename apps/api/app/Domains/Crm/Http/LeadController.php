@@ -4,11 +4,12 @@ namespace App\Domains\Crm\Http;
 
 use App\Domains\Crm\Actions\ConvertLead;
 use App\Models\Lead;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Http\Request;
 
 class LeadController
 {
-    use TenantRules;
+    use PaginatesRequests;
 
     public const STATUSES = ['new', 'contacted', 'qualified', 'won', 'lost'];
 
@@ -75,7 +76,7 @@ class LeadController
             'value' => 'nullable|integer|min:0',
             'address' => 'nullable|string|max:255',
             'message' => 'nullable|string|max:5000',
-            'assigned_to' => ['nullable', 'integer', $this->inTenant('users')],
+            'assigned_to' => ['nullable', 'integer', TenantRules::exists('users')],
         ]);
         $data['value'] = (int) ($data['value'] ?? 0);
 

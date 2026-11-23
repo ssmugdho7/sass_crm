@@ -6,7 +6,7 @@ import { can } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Button, Card, ErrorText, Input, Modal, PageHeader, Spinner, Table } from "@/components/ui";
-import { MobileList, Pager, label, useDebounced, type Customer, type Page } from "../projects/_crm/shared";
+import { ListEmpty, MobileList, Pager, label, useDebounced, type Customer, type Page } from "../projects/_crm/shared";
 import { CustomerForm } from "./CustomerForm";
 
 function CustomersPage() {
@@ -26,11 +26,20 @@ function CustomersPage() {
       <Card>
         <Input placeholder="Search customers…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="mb-4 w-full sm:max-w-xs" />
         <ErrorText error={error} />
-        {!data ? !error && <Spinner /> : (
+        {!data ? !error && <Spinner /> : data.data.length === 0 ? (
+          <ListEmpty
+            filtered={!!q}
+            noun="customers"
+            onClear={() => { setSearch(""); setPage(1); }}
+            icon="🏠"
+            title="No customers yet"
+            hint="Add homeowners and businesses you work for, or convert a won lead into a customer."
+            action={manage && <Button onClick={() => setCreating(true)}>+ Add a customer</Button>}
+          />
+        ) : (
           <>
             <MobileList
               rows={data.data}
-              empty="No customers yet."
               onRow={(c) => router.push(`/app/customers/${c.id}`)}
               render={(c) => (
                 <div className="flex items-start justify-between gap-3">
@@ -45,7 +54,6 @@ function CustomersPage() {
             <div className="hidden sm:block">
               <Table
                 rows={data.data}
-                empty="No customers yet."
                 onRow={(c) => router.push(`/app/customers/${c.id}`)}
                 columns={[
                   ["Name", (c) => <span className="font-medium text-slate-900">{c.name}</span>],

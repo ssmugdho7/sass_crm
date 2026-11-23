@@ -32,6 +32,7 @@ export type Payment = { id: number; amount: number; method: string; reference: s
 export type Paginated<T> = { data: T[]; current_page: number; last_page: number; total: number };
 
 export const ESTIMATE_STATUSES = ["draft", "sent", "accepted", "declined"] as const;
+/** Invoice list filters. "overdue" is derived (unpaid past due date), never stored; partial/paid derive from payments. */
 export const INVOICE_STATUSES = ["draft", "sent", "partial", "paid", "overdue", "void"] as const;
 export const PAYMENT_METHODS: Record<string, string> = { cash: "Cash", bank_transfer: "Bank transfer", check: "Check", card: "Card", stripe: "Online (Stripe)" };
 

@@ -1,10 +1,10 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useState } from "react";
 import { formatDate, money, platform } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
-import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Select, Spinner, Table, cx, fieldError } from "@/components/ui";
+import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Select, Spinner, Table, cx, fieldError, statusLabel } from "@/components/ui";
 import {
   StatusBadge, TENANT_STATUSES, UserEditModal,
   type AdminUser, type PermissionGroup, type Plan, type Role, type Tenant,
@@ -16,10 +16,10 @@ const TABS = ["Profile", "Add-ons", "Users", "Roles"] as const;
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const { data, error, reload } = useFetch<Detail>(`/platform/tenants/${id}`, "platform");
   const [tab, setTab] = useState<(typeof TABS)[number]>("Profile");
   const [actionError, setActionError] = useState<unknown>(null);
+  const [scheduled, setScheduled] = useState<string | null>(null);
 
   async function destroy() {
     if (!data) return;
@@ -31,13 +31,28 @@ export default function TenantDetailPage() {
       return;
     }
     try {
+      setActionError(null);
       await platform(`/platform/tenants/${id}`, { method: "DELETE" });
-      router.push("/admin/tenants");
+      setScheduled(name);
     } catch (e) {
       setActionError(e);
     }
   }
 
+  if (scheduled !== null) {
+    return (
+      <>
+        <PageHeader title="Account scheduled for deletion" />
+        <Card>
+          <p className="text-sm text-slate-700" role="status">
+            &ldquo;{scheduled}&rdquo; has been cancelled and all of its users were signed out. Its data, uploaded files and connected
+            integrations are being removed in the background.
+          </p>
+          <Link href="/admin/tenants" className="mt-4 inline-block text-sm font-medium text-brand-700 hover:text-brand-800">← Back to CRM Accounts</Link>
+        </Card>
+      </>
+    );
+  }
   if (error) return <ErrorText error={error} />;
   if (!data) return <Spinner />;
   const t = data.tenant;
@@ -129,7 +144,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
           </Field>
           <Field label="Status" error={fieldError(error, "status")}>
             <Select value={form.status} onChange={set("status")}>
-              {TENANT_STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+              {TENANT_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </Select>
           </Field>
           <Field label="Trial ends" error={fieldError(error, "trial_ends_at")}><Input type="date" value={form.trial_ends_at} onChange={set("trial_ends_at")} /></Field>
@@ -168,11 +183,11 @@ function AddonsTab({ tenantId, modules, onChanged }: { tenantId: number; modules
         rows={modules}
         columns={[
           ["Module", (m) => <span className="font-medium text-slate-900">{m.name}</span>],
-          ["Category", (m) => m.category],
+          ["Category", (m) => statusLabel(m.category)],
           ["Price / mo", (m) => (m.is_core ? "—" : money(m.price_monthly))],
           ["In plan", (m) => (m.included_in_plan ? <Badge tone="blue">included</Badge> : "")],
           ["Status", (m) => m.is_core ? <Badge tone="green">core</Badge>
-            : <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status.replace("_", " ")}</Badge>],
+            : <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
           ["", (m) => !m.is_core && (
             <Button variant={m.status === "active" ? "secondary" : "primary"} className="px-3 py-1" disabled={busy === m.key} onClick={() => toggle(m)}>
               {m.status === "active" ? "Disable" : "Enable"}
@@ -290,7 +305,7 @@ function RoleForm({ tenantId, role, groups, onDone }: { tenantId: number; role: 
           {groups.map((g) => (
             <div key={g.key} className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <button type="button" onClick={() => toggleGroup(g)} className="text-left text-sm font-medium text-slate-800 hover:text-brand-700">
-                {g.name} {!g.core && <span className="text-xs font-normal text-slate-400">add-on</span>}
+                {g.name} {!g.core && <span className="text-xs font-normal text-slate-500">add-on</span>}
               </button>
               <div className="flex flex-wrap gap-3 sm:justify-end">
                 {g.permissions.map((p) => (

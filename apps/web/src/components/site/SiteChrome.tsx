@@ -12,6 +12,8 @@ export function SiteHeader({ site, base }: { site: PublicSite; base: string }) {
     ["FAQ", "#faq", site.faqs.length > 0],
     ["Contact", "#contact", true],
   ];
+  const visible = links.filter(([, , show]) => show);
+  const sparse = visible.length <= 2; // few links fit on small tablets too
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
@@ -26,17 +28,18 @@ export function SiteHeader({ site, base }: { site: PublicSite; base: string }) {
           )}
           <span className="truncate text-lg font-bold text-slate-900">{site.tenant.name}</span>
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
-          {links.filter(([, , show]) => show).map(([label, hash]) => (
+        {/* Section links appear as content is added; Contact + the quote CTA are always there so a new site never looks broken. */}
+        <nav aria-label="Main" className={`hidden items-center gap-6 text-sm font-medium text-slate-600 ${sparse ? "sm:flex" : "md:flex"}`}>
+          {visible.map(([label, hash]) => (
             <a key={hash} href={`${base}${hash}`} className="hover:text-[var(--accent)]">{label}</a>
           ))}
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {s.phone && (
             <a href={`tel:${s.phone}`} className="hidden text-sm font-semibold text-slate-800 lg:block">{s.phone}</a>
           )}
-          <a href={`${base}#contact`} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
-            Free quote
+          <a href={`${base}#contact`} className="whitespace-nowrap rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90">
+            Get a quote
           </a>
         </div>
       </div>

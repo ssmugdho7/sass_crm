@@ -63,6 +63,19 @@ class InvoicesTest extends SalesTestCase
         $this->getJson('/api/app/invoices?status=overdue')->assertJsonCount(0, 'data');
     }
 
+    public function test_overdue_is_derived_and_cannot_be_set_manually(): void
+    {
+        $inv = $this->invoice(['due_date' => now()->addDays(5)->toDateString()]);
+        $this->postJson("/api/app/invoices/{$inv['id']}/status", ['status' => 'overdue'])->assertStatus(422)->assertJsonValidationErrors('status');
+        $this->postJson("/api/app/invoices/{$inv['id']}/status", ['status' => 'sent'])->assertOk()
+            ->assertJsonPath('status', 'sent')->assertJsonPath('is_overdue', false);
+        $this->getJson('/api/app/invoices?status=overdue')->assertJsonCount(0, 'data');
+
+        $this->putJson("/api/app/invoices/{$inv['id']}", ['due_date' => now()->subDay()->toDateString()])->assertOk()
+            ->assertJsonPath('status', 'sent')->assertJsonPath('is_overdue', true);
+        $this->getJson('/api/app/invoices?status=overdue')->assertJsonCount(1, 'data');
+    }
+
     public function test_invoices_and_payments_isolated(): void
     {
         $inv = $this->invoice();

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { crm, can, formatDate, money, toCents, toDollars } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
 import { useLookups, type Paginated } from "../appointments/_ops/shared";
 
 type Assignment = { id: number; name: string; status: string; pivot: { scope: string | null; agreed_amount: number } };
@@ -50,6 +50,7 @@ export default function SubcontractorsPage() {
   if (filters.expiring) q.set("expiring", "1");
   const { data, error, reload } = useFetch<Paginated<Sub>>(`/app/subcontractors?${q}`);
   const rows = data?.data ?? (error ? [] : null);
+  const filtered = Boolean(filters.search || filters.trade || filters.status || filters.expiring);
 
   const [editing, setEditing] = useState<Sub | "new" | null>(null);
   const [form, setForm] = useState<Form>(empty);
@@ -179,7 +180,14 @@ export default function SubcontractorsPage() {
           <Table
             rows={rows}
             onRow={open}
-            empty="No subcontractors yet."
+            empty={filtered ? "No subcontractors match these filters." : (
+              <EmptyState
+                icon="🧰"
+                title="No subcontractors yet"
+                hint="Keep your trades, contacts and insurance dates in one place, then assign them to jobs."
+                action={manage && <Button onClick={() => open("new")}>Add subcontractor</Button>}
+              />
+            )}
             columns={[
               ["Company", (s) => <div><p className="font-medium text-slate-900">{s.company_name}</p><p className="text-xs text-slate-500">{s.contact_name}</p></div>],
               ["Trade", (s) => s.trade ?? "—"],
@@ -242,7 +250,7 @@ export default function SubcontractorsPage() {
                   <Button type="button" variant="secondary" onClick={addAssignment} disabled={!assign.project_id}>Assign</Button>
                 </div>
               )}
-              {manage && projects.length === 0 && <p className="mt-1 text-xs text-slate-400">No jobs available to assign.</p>}
+              {manage && projects.length === 0 && <p className="mt-1 text-xs text-slate-500">No jobs available to assign.</p>}
             </div>
           )}
 

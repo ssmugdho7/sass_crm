@@ -7,7 +7,7 @@ import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
 import {
-  LEAD_SOURCES, LEAD_STATUSES, MobileList, Pager, idOrNull, label, orNull, tone, useDebounced, useUsers,
+  IconButton, LEAD_SOURCES, LEAD_STATUSES, ListEmpty, MobileList, Pager, idOrNull, label, orNull, tone, useDebounced, useUsers,
   type Lead, type Page,
 } from "../projects/_crm/shared";
 
@@ -131,17 +131,21 @@ function LeadsPage() {
     }
   }
 
+  const primary = (l: Lead) =>
+    l.customer_id ? (
+      can(me, "customers.view") && <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => router.push(`/app/customers/${l.customer_id}`)}>Customer</Button>
+    ) : (
+      l.status !== "lost" && <Button className="px-2.5 py-1 text-xs" onClick={() => setConverting(l)}>Convert</Button>
+    );
   const actions = (l: Lead) => (
     <>
-      {l.customer_id ? (
-        can(me, "customers.view") && <Button variant="ghost" className="px-2 py-1" onClick={() => router.push(`/app/customers/${l.customer_id}`)}>Customer</Button>
-      ) : (
-        l.status !== "lost" && <Button className="px-2 py-1" onClick={() => setConverting(l)}>Convert</Button>
-      )}
-      <Button variant="secondary" className="px-2 py-1" onClick={() => setEditing(l)}>Edit</Button>
-      <Button variant="danger-ghost" className="px-2 py-1" onClick={() => remove(l)} aria-label={`Delete lead ${l.name}`}>Delete</Button>
+      {primary(l)}
+      <IconButton icon="edit" label={`Edit lead ${l.name}`} onClick={() => setEditing(l)} />
+      <IconButton icon="trash" danger label={`Delete lead ${l.name}`} onClick={() => remove(l)} />
     </>
   );
+  const filtered = !!(q || status);
+  const clear = () => { setSearch(""); setStatus(""); setPage(1); };
 
   return (
     <div>
@@ -155,11 +159,20 @@ function LeadsPage() {
           </Select>
         </div>
         <ErrorText error={error || actionError} />
-        {!data ? !error && <Spinner /> : (
+        {!data ? !error && <Spinner /> : data.data.length === 0 ? (
+          <ListEmpty
+            filtered={filtered}
+            noun="leads"
+            onClear={clear}
+            icon="📥"
+            title="No leads yet"
+            hint="Enquiries from your website form land here automatically."
+            action={manage && <Button onClick={() => setEditing("new")}>+ Add a lead</Button>}
+          />
+        ) : (
           <>
             <MobileList
               rows={data.data}
-              empty="No leads match."
               render={(l) => (
                 <div className="space-y-2">
                   <div className="flex items-start justify-between gap-3">
@@ -167,33 +180,35 @@ function LeadsPage() {
                       <p className="truncate font-medium text-slate-900">{l.name}</p>
                       <p className="truncate text-xs text-slate-500">{[l.service, l.company, l.phone].filter(Boolean).join(" · ") || "—"}</p>
                     </div>
-                    <Badge tone={tone(l.status)}>{label(l.status)}</Badge>
+                    <Badge tone={tone(l.status)}>{l.status}</Badge>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
                     <span>{money(l.value)} · {label(l.source)} · {formatDate(l.created_at)}</span>
                   </div>
-                  {manage && <div className="flex flex-wrap gap-1">{actions(l)}</div>}
+                  {manage && <div className="flex flex-wrap items-center gap-1">{actions(l)}</div>}
                 </div>
               )}
             />
             <div className="hidden sm:block">
               <Table
                 rows={data.data}
-                empty="No leads match."
                 columns={[
-                  ["Name", (l) => (
-                    <div className="min-w-[10rem]">
-                      <p className="font-medium text-slate-900">{l.name}</p>
-                      <p className="text-xs text-slate-500">{[l.company, l.email, l.phone].filter(Boolean).join(" · ")}</p>
-                    </div>
-                  )],
-                  ["Service", (l) => l.service || "—"],
-                  ["Source", (l) => label(l.source)],
-                  ["Value", (l) => money(l.value)],
-                  ["Status", (l) => <Badge tone={tone(l.status)}>{label(l.status)}</Badge>],
+                  ["Name", (l) => {
+                    const sub = [l.company, l.email, l.phone].filter(Boolean).join(" · ");
+                    return (
+                      <div className="min-w-[10rem] max-w-[16rem]">
+                        <p className="truncate font-medium text-slate-900" title={l.name}>{l.name}</p>
+                        {sub && <p className="truncate text-xs text-slate-500" title={sub}>{sub}</p>}
+                      </div>
+                    );
+                  }],
+                  ["Service", (l) => <span className="block max-w-[10rem] truncate whitespace-nowrap" title={l.service ?? undefined}>{l.service || "—"}</span>],
+                  ["Source", (l) => <span className="whitespace-nowrap">{label(l.source)}</span>],
+                  ["Value", (l) => <span className="whitespace-nowrap">{money(l.value)}</span>],
+                  ["Status", (l) => <Badge tone={tone(l.status)}>{l.status}</Badge>],
                   ["Received", (l) => <span className="whitespace-nowrap">{formatDate(l.created_at)}</span>],
-                  ["Assigned", (l) => l.assignee?.name ?? "—"],
-                  ["", (l) => manage && <div className="flex justify-end gap-1 whitespace-nowrap">{actions(l)}</div>],
+                  ["Assigned", (l) => <span className="block max-w-[8rem] truncate whitespace-nowrap" title={l.assignee?.name}>{l.assignee?.name ?? "—"}</span>],
+                  ["", (l) => manage && <div className="flex items-center justify-end gap-0.5 whitespace-nowrap">{actions(l)}</div>],
                 ]}
               />
             </div>

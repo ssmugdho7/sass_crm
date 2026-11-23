@@ -16,7 +16,11 @@ use Illuminate\Validation\Rule;
 
 class InvoiceController extends Controller
 {
+    /** Filterable statuses; "overdue" is a derived filter, not a stored status. */
     public const STATUSES = ['draft', 'sent', 'partial', 'paid', 'overdue', 'void'];
+
+    /** Manually settable statuses. partial & paid derive from payments; overdue derives from due_date. */
+    public const MANUAL_STATUSES = ['draft', 'sent', 'void'];
 
     public function index(Request $request)
     {
@@ -27,10 +31,10 @@ class InvoiceController extends Controller
 
         return Invoice::with('customer:id,name', 'project:id,name')
             ->when($data['status'] ?? null, function ($q, $s) {
-                // "overdue" is computed: unpaid balance past its due date (or explicitly marked overdue).
+                // "overdue" is derived only: unpaid balance past its due date. It is never a stored status.
                 $s === 'overdue'
                     ? $q->where('status', '!=', 'void')->whereColumn('amount_paid', '<', 'total')
-                        ->where(fn ($w) => $w->where('status', 'overdue')->orWhereDate('due_date', '<', today()))
+                        ->whereDate('due_date', '<', today())
                     : $q->where('status', $s);
             })
             ->when($data['customer_id'] ?? null, fn ($q, $c) => $q->where('customer_id', $c))
@@ -74,11 +78,11 @@ class InvoiceController extends Controller
         return $this->present($invoice);
     }
 
-    /** Manual status: draft / sent / overdue / void. partial & paid are derived from payments. */
+    /** Manual status: draft / sent / void. partial & paid derive from payments; overdue from due_date. */
     public function status(Request $request, string $invoiceId, RefreshInvoiceStatus $refresh)
     {
         $invoice = Invoice::findOrFail($invoiceId);
-        $data = $request->validate(['status' => ['required', Rule::in(['draft', 'sent', 'overdue', 'void'])]]);
+        $data = $request->validate(['status' => ['required', Rule::in(self::MANUAL_STATUSES)]]);
         $invoice->update($data);
         if ($data['status'] !== 'void') {
             $refresh($invoice); // re-derive status after total change

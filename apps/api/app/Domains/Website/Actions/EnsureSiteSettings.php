@@ -5,14 +5,17 @@ namespace App\Domains\Website\Actions;
 use App\Domains\Website\Models\SiteSetting;
 use App\Models\Tenant;
 
-/** Returns the tenant's site settings, creating sensible defaults from the tenant profile on first use. */
+/**
+ * Returns the tenant's site settings, creating sensible defaults from the tenant profile on first use.
+ * New sites start as drafts (published=false) so visitors never see a near-empty site; the owner publishes once ready.
+ */
 class EnsureSiteSettings
 {
     public function __invoke(Tenant $tenant): SiteSetting
     {
         return SiteSetting::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->first()
             ?? tap(new SiteSetting([
-                'published' => true,
+                'published' => false,
                 'theme_color' => '#ea580c',
                 'hero_title' => "{$tenant->name} — quality construction you can trust",
                 'hero_subtitle' => 'Residential and commercial building, renovations and repairs. Licensed, insured and on schedule.',

@@ -3,8 +3,8 @@
 namespace App\Domains\Operations\Http;
 
 use App\Domains\Operations\Models\Subcontractor;
-use App\Domains\Operations\Support\TenantRules;
 use App\Http\Controllers\Controller;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Http\Request;
 
 class SubcontractorController extends Controller

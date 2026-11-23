@@ -183,9 +183,36 @@ class CrmTest extends TestCase
         $res = $this->getJson('/api/app/dashboard')->assertOk()->assertJsonStructure([
             'stats' => ['open_leads', 'pipeline_value', 'active_projects', 'open_tasks', 'overdue_tasks', 'unpaid_invoices', 'revenue_this_month'],
             'recent_leads', 'upcoming_tasks', 'projects_by_status',
+            'onboarding' => ['has_leads', 'has_customers', 'has_projects', 'has_estimates', 'website_services', 'website_published'],
         ]);
+        $this->assertTrue($res->json('onboarding.has_leads'));
+        $this->assertTrue($res->json('onboarding.has_projects'));
         $this->assertSame(6, $res->json('stats.open_leads'));
         $this->assertSame(1, $res->json('stats.overdue_tasks'));
         $this->assertSame(4, Project::withoutGlobalScope('tenant')->count());
+    }
+
+    public function test_dashboard_onboarding_and_unpaid_sum_for_new_account(): void
+    {
+        $owner = $this->otherOwner();
+        Sanctum::actingAs($owner, ['crm']);
+
+        $res = $this->getJson('/api/app/dashboard')->assertOk();
+        $this->assertSame([
+            'has_leads' => false, 'has_customers' => false, 'has_projects' => false,
+            'has_estimates' => false, 'website_services' => 0,
+        ], collect($res->json('onboarding'))->except('website_published')->all());
+        $this->assertSame(0, $res->json('stats.unpaid_invoices'));
+
+        $customer = Customer::withoutGlobalScope('tenant')->forceCreate(['tenant_id' => $owner->tenant_id, 'name' => 'Acme']);
+        $base = ['tenant_id' => $owner->tenant_id, 'customer_id' => $customer->id, 'issue_date' => today(), 'items' => '[]'];
+        // Outstanding = 7500 (sent) + 0 (overpaid partial is clamped); paid and draft are excluded.
+        foreach ([['INV-1', 'sent', 10000, 2500], ['INV-2', 'partial', 5000, 6000], ['INV-3', 'paid', 9000, 9000], ['INV-4', 'draft', 7000, 0]] as [$num, $status, $total, $paid]) {
+            DB::table('invoices')->insert($base + ['number' => $num, 'status' => $status, 'total' => $total, 'amount_paid' => $paid, 'public_token' => $num.'-tok']);
+        }
+
+        $res = $this->getJson('/api/app/dashboard')->assertOk();
+        $this->assertSame(7500, $res->json('stats.unpaid_invoices'));
+        $this->assertTrue($res->json('onboarding.has_customers'));
     }
 }

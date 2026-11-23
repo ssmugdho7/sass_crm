@@ -3,11 +3,12 @@
 namespace App\Domains\Integrations\Listeners;
 
 use App\Domains\Integrations\Models\CalendarEventLink;
+use App\Domains\Integrations\Models\GoogleCalendarToken;
 use App\Domains\Integrations\Services\GoogleCalendarClient;
 use App\Events\AppointmentSaved;
 use App\Models\Tenant;
 use Carbon\CarbonImmutable;
-use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -15,13 +16,27 @@ use Throwable;
 /**
  * Mirrors appointments into the tenant's Google Calendar. Runs on the queue; Google/HTTP failures
  * throw so the job is retried (404/410 on delete count as success). Final failure is logged.
+ * Queued only after the surrounding transaction commits, and only for tenants that actually sync.
  */
-class SyncAppointmentToGoogle implements ShouldQueue
+class SyncAppointmentToGoogle implements ShouldQueueAfterCommit
 {
     public int $tries = 3;
 
     /** @var array<int, int> */
     public array $backoff = [10, 60, 300];
+
+    /** Skip the queue entirely unless the tenant has the add-on, a Google connection and (for deletes) a linked event. */
+    public function shouldQueue(AppointmentSaved $event): bool
+    {
+        $tenant = Tenant::find($event->tenantId);
+        if (! $tenant || ! $tenant->hasModule('google_calendar')
+            || ! GoogleCalendarToken::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->exists()) {
+            return false;
+        }
+
+        return ! $event->deleted || CalendarEventLink::withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenant->id)->where('appointment_id', $event->appointmentId)->exists();
+    }
 
     public function handle(AppointmentSaved $event): void
     {

@@ -28,7 +28,7 @@ class RegisterTenant
                 'plan_id' => $plan?->id, 'status' => 'trial', 'trial_ends_at' => now()->addDays(14),
             ]);
             foreach ($plan?->included_modules ?? [] as $key) {
-                TenantModule::withoutGlobalScope('tenant')->create(['tenant_id' => $tenant->id, 'module_key' => $key]);
+                TenantModule::withoutGlobalScope('tenant')->create(['tenant_id' => $tenant->id, 'module_key' => $key, 'source' => 'plan']);
             }
             $owner = ($this->roles)($tenant);
 

@@ -2,11 +2,17 @@
 
 namespace Tests\Feature\Platform;
 
+use App\Domains\Platform\Jobs\PurgeTenant;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class PlatformAdminTest extends TestCase
@@ -164,9 +170,56 @@ class PlatformAdminTest extends TestCase
             ->assertOk()->assertJsonPath('price_monthly', 1200)->assertJsonPath('is_active', false);
         $this->putJson('/api/platform/modules/leads', ['is_active' => false])->assertStatus(422);
 
+    }
+
+    public function test_tenant_delete_cancels_revokes_tokens_and_queues_purge(): void
+    {
+        Queue::fake();
+        $crmToken = $this->crmToken();
         $tenant = $this->demoTenant();
-        $this->deleteJson("/api/platform/tenants/{$tenant->id}")->assertNoContent();
+        $userIds = User::where('tenant_id', $tenant->id)->pluck('id');
+        $this->assertGreaterThan(0, DB::table('personal_access_tokens')->whereIn('tokenable_id', $userIds)->where('tokenable_type', User::class)->count());
+
+        $this->flushHeaders();
+        $this->asSuper()->deleteJson("/api/platform/tenants/{$tenant->id}")->assertStatus(202);
+
+        Queue::assertPushed(PurgeTenant::class, fn (PurgeTenant $job) => $job->tenantId === $tenant->id);
+        $this->assertSame('cancelled', $tenant->fresh()->status);
+        $this->assertSame(0, DB::table('personal_access_tokens')->whereIn('tokenable_id', $userIds)->where('tokenable_type', User::class)->count());
+
+        $this->flushHeaders();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($crmToken)->getJson('/api/auth/me')->assertUnauthorized();
+    }
+
+    public function test_purge_tenant_job_removes_files_google_grant_and_rows(): void
+    {
+        Storage::fake('public');
+        Http::fake(['oauth2.googleapis.com/*' => Http::response('', 400)]);
+        $tenant = $this->demoTenant();
+        $other = Tenant::where('id', '!=', $tenant->id)->first();
+
+        Storage::disk('public')->put("sites/{$tenant->id}/logo.png", 'x');
+        if ($other) {
+            Storage::disk('public')->put("sites/{$other->id}/logo.png", 'y');
+        }
+        DB::table('google_calendar_tokens')->insert([
+            'tenant_id' => $tenant->id, 'access_token' => Crypt::encryptString('access-1'), 'refresh_token' => Crypt::encryptString('refresh-1'),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->asSuper()->deleteJson("/api/platform/tenants/{$tenant->id}")->assertStatus(202); // sync queue runs PurgeTenant inline
+
+        Http::assertSent(fn ($req) => $req->url() === 'https://oauth2.googleapis.com/revoke' && $req['token'] === 'refresh-1');
+        Storage::disk('public')->assertMissing("sites/{$tenant->id}/logo.png");
+        $this->assertFalse(Storage::disk('public')->exists("sites/{$tenant->id}"));
+        if ($other) {
+            Storage::disk('public')->assertExists("sites/{$other->id}/logo.png");
+        }
         $this->assertDatabaseMissing('tenants', ['id' => $tenant->id]);
         $this->assertDatabaseMissing('users', ['email' => 'owner@demo.test']);
+        $this->assertDatabaseMissing('google_calendar_tokens', ['tenant_id' => $tenant->id]);
+
+        (new PurgeTenant($tenant->id))->handle(); // idempotent when already gone
     }
 }

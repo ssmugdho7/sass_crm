@@ -3,11 +3,12 @@
 namespace App\Domains\Crm\Http;
 
 use App\Models\Task;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Http\Request;
 
 class TaskController
 {
-    use TenantRules;
+    use PaginatesRequests;
 
     public const STATUSES = ['todo', 'in_progress', 'done'];
 
@@ -64,11 +65,11 @@ class TaskController
         return $request->validate([
             'title' => 'required|string|max:190',
             'description' => 'nullable|string|max:5000',
-            'project_id' => ['nullable', 'integer', $this->inTenant('projects')],
+            'project_id' => ['nullable', 'integer', TenantRules::exists('projects')],
             'status' => 'sometimes|in:'.implode(',', self::STATUSES),
             'priority' => 'sometimes|in:low,normal,high,urgent',
             'due_date' => 'nullable|date',
-            'assigned_to' => ['nullable', 'integer', $this->inTenant('users')],
+            'assigned_to' => ['nullable', 'integer', TenantRules::exists('users')],
         ]);
     }
 }

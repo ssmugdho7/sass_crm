@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { can, formatDate, money } from "@/lib/api";
+import { can, formatDate, hasModule, money, type Me } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Card, ErrorText, Link, PageHeader, Spinner, Stat } from "@/components/ui";
-import { isOverdue, label, tone, type Lead, type Task } from "./projects/_crm/shared";
+import { Badge, Card, ErrorText, Link, PageHeader, Spinner, Stat, statusLabel } from "@/components/ui";
+import { isOverdue, tone, type Lead, type Task } from "./projects/_crm/shared";
 
 type Dashboard = {
   stats: {
@@ -15,7 +15,52 @@ type Dashboard = {
   recent_leads: Lead[];
   upcoming_tasks: Task[];
   projects_by_status: Record<string, number>;
+  onboarding?: {
+    has_leads: boolean; has_customers: boolean; has_projects: boolean; has_estimates: boolean;
+    website_services: number; website_published: boolean;
+  };
 };
+
+/** First-run checklist; only steps the user can act on (module installed + permission) are shown. */
+function GettingStarted({ me, onboarding }: { me: Me | null; onboarding: NonNullable<Dashboard["onboarding"]> }) {
+  const steps = [
+    { done: onboarding.has_leads, text: "Add your first lead", href: "/app/leads?new=1", module: "leads", perm: "leads.manage" },
+    { done: onboarding.has_customers, text: "Add a customer", href: "/app/customers?new=1", module: "customers", perm: "customers.manage" },
+    { done: onboarding.has_projects, text: "Create a project", href: "/app/projects?new=1", module: "projects", perm: "projects.manage" },
+    { done: onboarding.has_estimates, text: "Send an estimate", href: "/app/estimates/new", module: "estimates", perm: "estimates.manage" },
+    { done: onboarding.website_services > 0, text: "Add a service to your website", href: "/app/website", module: "website", perm: "website.manage" },
+    { done: onboarding.website_published, text: "Publish your site", href: "/app/website", module: "website", perm: "website.manage" },
+  ].filter((s) => hasModule(me, s.module) && can(me, s.perm));
+  const done = steps.filter((s) => s.done).length;
+  if (!steps.length || done === steps.length) return null;
+
+  return (
+    <Card title="Getting started" actions={<span className="text-sm text-slate-600">{done} of {steps.length} done</span>}>
+      <div className="mb-4 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={steps.length} aria-valuenow={done} aria-label="Setup progress">
+        <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${(done / steps.length) * 100}%` }} />
+      </div>
+      <ul className="grid gap-2 sm:grid-cols-2">
+        {steps.map((s) => (
+          <li key={s.text}>
+            {s.done ? (
+              <div className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-500">
+                <span aria-hidden className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-600 text-xs text-white">✓</span>
+                <span className="line-through">{s.text}</span>
+                <span className="sr-only">(done)</span>
+              </div>
+            ) : (
+              <Link href={s.href} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-800 ring-1 ring-slate-200 hover:bg-brand-50 hover:ring-brand-200">
+                <span aria-hidden className="h-5 w-5 shrink-0 rounded-full border-2 border-slate-300" />
+                <span className="flex-1">{s.text}</span>
+                <span aria-hidden className="text-brand-700">→</span>
+              </Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 const STATUS_ORDER = ["planning", "in_progress", "on_hold", "completed", "cancelled"];
 
@@ -55,6 +100,7 @@ export default function DashboardPage() {
         !error && <Spinner />
       ) : (
         <div className="space-y-6">
+          {data.onboarding && <GettingStarted me={me} onboarding={data.onboarding} />}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Stat label="Open leads" value={data.stats.open_leads} hint={`${money(data.stats.pipeline_value)} in pipeline`} />
             <Stat label="Active projects" value={data.stats.active_projects} hint="Planning or in progress" />
@@ -79,11 +125,11 @@ export default function DashboardPage() {
                       <li key={l.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                         <div className="min-w-0">
                           <p className="truncate font-medium text-slate-900">{l.name}</p>
-                          <p className="truncate text-xs text-slate-500">{l.service || "—"} · {label(l.source)}</p>
+                          <p className="truncate text-xs text-slate-500">{l.service || "—"} · {statusLabel(l.source)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
                           <span className="text-slate-600">{money(l.value)}</span>
-                          <Badge tone={tone(l.status)}>{label(l.status)}</Badge>
+                          <Badge tone={tone(l.status)}>{l.status}</Badge>
                         </div>
                       </li>
                     ))}
@@ -110,16 +156,18 @@ export default function DashboardPage() {
               ) : <p className="text-sm text-slate-500">Nothing scheduled.</p>}
             </Card>
 
+            {Object.values(data.projects_by_status).some((n) => n > 0) && (
             <Card title="Projects by status" actions={can(me, "projects.view") && <Link href="/app/projects" className="text-sm text-brand-700 hover:underline">View all</Link>}>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {STATUS_ORDER.map((s) => (
                   <Link key={s} href={`/app/projects?status=${s}`} className="rounded-lg border border-slate-200 p-3 text-center hover:bg-slate-50">
                     <p className="text-xl font-bold text-slate-900">{data.projects_by_status[s] ?? 0}</p>
-                    <p className="text-xs text-slate-500">{label(s)}</p>
+                    <p className="text-xs text-slate-500">{statusLabel(s)}</p>
                   </Link>
                 ))}
               </div>
             </Card>
+            )}
           </div>
         </div>
       )}

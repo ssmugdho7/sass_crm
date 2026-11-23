@@ -9,6 +9,7 @@ Route::middleware(['auth:sanctum', 'tenant', 'module:website', 'perm:website.man
     Route::get('settings', [SiteSettingsController::class, 'show']);
     Route::put('settings', [SiteSettingsController::class, 'update']);
     Route::get('checklist', [SiteSettingsController::class, 'checklist']);
+    Route::get('preview', [SiteSettingsController::class, 'preview']);
     Route::post('upload', [SiteSettingsController::class, 'upload'])->middleware('throttle:60,1');
     Route::get('portfolio/importable-projects', [SiteSettingsController::class, 'importableProjects']);
     Route::post('portfolio/from-project/{project}', [SiteSettingsController::class, 'importProject'])->whereNumber('project');

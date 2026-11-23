@@ -7,7 +7,6 @@ use App\Domains\Integrations\Services\TenantModuleConfig;
 use App\Domains\Sales\Actions\RecordPayment;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
-use App\Models\Payment;
 use App\Models\Tenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,10 +74,16 @@ class StripeController extends Controller
             $invoice = Invoice::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)
                 ->find($session['metadata']['invoice_id'] ?? 0);
             $reference = (string) ($session['id'] ?? '');
-            $amount = (int) ($session['amount_total'] ?? 0);
-            if ($invoice && $reference !== '' && $amount > 0
-                && ! Payment::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->where('reference', $reference)->exists()) {
-                $record($invoice, $amount, 'stripe', $reference);
+            $expected = strtolower((string) ($config['currency'] ?? '') ?: 'usd');
+            $currency = strtolower((string) ($session['currency'] ?? $expected));
+            if ($currency !== $expected) {
+                Log::warning('Stripe session currency mismatch ignored', ['tenant' => $tenant->id, 'session' => $reference, 'currency' => $currency, 'expected' => $expected]);
+            } elseif ($invoice && $reference !== '') {
+                // Never record more than is still owed (RecordPayment dedupes repeated deliveries by reference).
+                $amount = min((int) ($session['amount_total'] ?? 0), (int) $invoice->total - (int) $invoice->amount_paid);
+                if ($amount > 0) {
+                    $record($invoice, $amount, 'stripe', $reference);
+                }
             }
         }
 

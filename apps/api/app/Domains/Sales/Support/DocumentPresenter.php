@@ -11,7 +11,7 @@ class DocumentPresenter
     public static function isOverdue(Invoice $invoice): bool
     {
         return $invoice->status !== 'void' && self::balance($invoice) > 0
-            && ($invoice->status === 'overdue' || ($invoice->due_date !== null && $invoice->due_date->lt(today())));
+            && $invoice->due_date !== null && $invoice->due_date->lt(today());
     }
 
     public static function balance(Invoice $invoice): int

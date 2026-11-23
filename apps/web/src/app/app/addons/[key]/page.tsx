@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { ApiError, crm } from "@/lib/api";
+import { ApiError, can, crm } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { Badge, Button, Card, ErrorText, Field, Input, Link, PageHeader, Spinner, fieldError } from "@/components/ui";
 import { type Addon, fieldLabel } from "../_types";
@@ -53,6 +53,8 @@ export default function AddonConfigPage() {
   };
 
   if (!addon) return error ? <div><BackLink /><ErrorText error={error} /></div> : <Spinner />;
+  // Payment secrets decide where customer payments go, so they need payments.manage as well.
+  const locked = key === "payment_gateway" && !can(me, "payments.manage");
 
   return (
     <div className="max-w-2xl">
@@ -65,7 +67,7 @@ export default function AddonConfigPage() {
         </div>
       )}
 
-      {key === "payment_gateway" && me?.tenant && <StripeWebhook slug={me.tenant.slug} />}
+      {key === "payment_gateway" && !locked && me?.tenant && <StripeWebhook slug={me.tenant.slug} />}
       {key === "google_calendar" && addon.installed && (
         <Suspense fallback={null}>
           <GoogleConnect />
@@ -73,6 +75,9 @@ export default function AddonConfigPage() {
       )}
 
       <Card title="Settings">
+        {locked ? (
+          <p className="text-sm text-slate-600">You need the <strong>Payments: Manage</strong> permission to view or change payment settings. Ask your account owner.</p>
+        ) : (
         <form onSubmit={save} className="space-y-4">
           <ErrorText error={error instanceof ApiError && Object.keys(error.errors).length ? null : error} />
           {saved && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Settings saved.</p>}
@@ -91,6 +96,7 @@ export default function AddonConfigPage() {
             <Button disabled={busy}>{busy ? "Saving…" : "Save settings"}</Button>
           </div>
         </form>
+        )}
       </Card>
     </div>
   );

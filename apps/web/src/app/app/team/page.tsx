@@ -77,9 +77,11 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
   const [rowErr, setRowErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const roleById = new Map(roles.map((r) => [r.id, r]));
-  const canManage = (m: Member) => manage && (isFull(myPerms) || !isFull(roleById.get(m.role_id ?? -1)?.permissions));
+  // Mirrors the API: you can only manage people whose role permissions you fully hold (or yourself).
+  const canManage = (m: Member) => manage && (m.id === meId || canGrant(myPerms, roleById.get(m.role_id ?? -1)?.permissions ?? []));
   const assignable = roles.filter((r) => canGrant(myPerms, r.permissions));
   const editingSelf = editing !== null && editing !== "new" && editing.id === meId;
+  const canBill = isFull(myPerms) || myPerms.includes("account.manage");
   const full = users.max_users !== null && users.active_users >= users.max_users;
 
   const open = (m: Member | "new") => {
@@ -130,14 +132,14 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
     >
       {full && manage && (
         <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          You&apos;ve used every seat on your plan. <a href="/app/billing" className="font-medium underline">Upgrade</a> to add more people.
+          You&apos;ve used every seat on your plan. {canBill ? <><a href="/app/billing" className="font-medium underline">Upgrade</a> to add more people.</> : "Ask your account owner to upgrade the plan to add more people."}
         </p>
       )}
       <ErrorText error={rowErr} />
       <Table
         rows={users.data}
         columns={[
-          ["Name", (m) => (<div><p className="font-medium text-slate-900">{m.name}{m.id === meId && <span className="ml-1 text-xs text-slate-400">(you)</span>}</p><p className="text-xs text-slate-500">{m.email}</p></div>)],
+          ["Name", (m) => (<div><p className="font-medium text-slate-900">{m.name}{m.id === meId && <span className="ml-1 text-xs text-slate-500">(you)</span>}</p><p className="text-xs text-slate-500">{m.email}</p></div>)],
           ["Role", (m) => m.role?.name ?? "—"],
           ["Status", (m) => <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
           ["Last login", (m) => (m.last_login_at ? formatDate(m.last_login_at) : "Never")],

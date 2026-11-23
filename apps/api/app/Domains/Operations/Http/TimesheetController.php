@@ -3,8 +3,8 @@
 namespace App\Domains\Operations\Http;
 
 use App\Domains\Operations\Models\Timesheet;
-use App\Domains\Operations\Support\TenantRules;
 use App\Http\Controllers\Controller;
+use App\Support\Tenancy\TenantRules;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -44,6 +44,9 @@ class TimesheetController extends Controller
         if (! $this->isManager($request) || empty($data['user_id'])) {
             $data['user_id'] = $request->user()->id;
         }
+        if (! $this->isManager($request)) {
+            unset($data['hourly_rate']); // pay rates are set by managers only
+        }
         unset($data['approved']);
 
         return response()->json(Timesheet::create($data)->load(self::WITH), 201);
@@ -56,7 +59,7 @@ class TimesheetController extends Controller
         abort_if($entry->approved && ! $manager, 403, 'Approved entries can only be changed by a manager.');
         $data = $this->validated($request, true);
         if (! $manager) {
-            unset($data['user_id']);
+            unset($data['user_id'], $data['hourly_rate']); // pay rates are set by managers only
         }
         unset($data['approved']);
         $entry->update($data);

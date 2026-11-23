@@ -1,16 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { crm, money } from "@/lib/api";
+import { can, crm, money } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, ErrorText, Link, PageHeader, Spinner } from "@/components/ui";
+import { Badge, Button, EmptyState, ErrorText, Link, PageHeader, Spinner } from "@/components/ui";
 import type { Addon } from "./_types";
 
 const categoryIcon: Record<string, string> = { core: "🧱", finance: "💰", operations: "🛠️", payments: "💳", productivity: "📅" };
 
 export default function AddonsPage() {
-  const { refresh } = useSession();
+  const { me } = useSession();
+  if (me && !can(me, "account.manage")) {
+    return (
+      <div>
+        <PageHeader title="Add-ons" />
+        <EmptyState icon="🔒" title="Only account admins can manage add-ons" hint="Ask your account owner to install or configure add-ons." />
+      </div>
+    );
+  }
+  return <AddonsList />;
+}
+
+function AddonsList() {
+  const { me, refresh } = useSession();
+  const canPayments = can(me, "payments.manage");
   const { data, setData, error: loadError } = useFetch<{ data: Addon[] }>("/app/addons");
   const addons = data?.data ?? null;
   const [actionError, setError] = useState<unknown>(null);
@@ -60,7 +74,7 @@ export default function AddonsPage() {
                 <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>
                   {busy === a.key ? "Working…" : a.installed ? "Uninstall" : "Install"}
                 </Button>
-                {a.installed && a.configurable && (
+                {a.installed && a.configurable && (a.key !== "payment_gateway" || canPayments) && (
                   <Link href={`/app/addons/${a.key}`} className="text-sm font-medium text-brand-700 hover:underline">Configure →</Link>
                 )}
               </div>

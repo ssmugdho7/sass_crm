@@ -33,10 +33,18 @@ class TeamGuard
         abort_if($missing !== [], 403, 'You cannot grant permissions you do not hold: '.implode(', ', $missing));
     }
 
-    /** Abort 403 if $actor may not manage $target (a full-access user). */
+    /**
+     * Abort 403 if $actor may not manage $target. Managing another user (credentials, status, deletion)
+     * effectively grants their access, so the actor must hold every permission on the target's role.
+     */
     public static function ensureCanManageUser(User $actor, User $target): void
     {
-        abort_if(! self::isFull($actor) && self::isFull($target), 403, 'Only users with full access can manage this user.');
+        if (self::isFull($actor) || $actor->id === $target->id) {
+            return;
+        }
+        abort_if(self::isFull($target), 403, 'Only users with full access can manage this user.');
+        $missing = array_filter($target->role?->permissions ?? [], fn ($p) => ! $actor->hasPermission($p));
+        abort_if($missing !== [], 403, 'You cannot manage a user who has permissions you do not hold: '.implode(', ', $missing));
     }
 
     /** Abort 403 if $actor may not assign $role. */

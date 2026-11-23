@@ -32,6 +32,34 @@ class EscalationTest extends AccountTestCase
         $this->assertSame('owner@demo.test', $owner->fresh()->email);
     }
 
+    public function test_manager_cannot_take_over_peer_with_permissions_they_lack(): void
+    {
+        $this->teamManager();
+        $accountant = $this->role('field-crew');
+        $accountant->update(['permissions' => ['dashboard.view', 'invoices.view', 'invoices.manage']]);
+        $peer = $this->makeUser('field-crew', 'accountant@demo.test');
+
+        $this->putJson("/api/app/team/users/{$peer->id}", ['password' => 'hijacked123'])->assertForbidden();
+        $this->putJson("/api/app/team/users/{$peer->id}", ['email' => 'evil@demo.test'])->assertForbidden();
+        $this->putJson("/api/app/team/users/{$peer->id}", ['name' => 'Renamed'])->assertForbidden();
+        $this->postJson("/api/app/team/users/{$peer->id}/disable")->assertForbidden();
+        $this->postJson("/api/app/team/users/{$peer->id}/enable")->assertForbidden();
+        $this->deleteJson("/api/app/team/users/{$peer->id}")->assertForbidden();
+        $this->assertSame('accountant@demo.test', $peer->fresh()->email);
+        $this->assertSame('active', $peer->fresh()->status);
+
+        // A peer whose permissions the manager fully holds can still be managed.
+        $accountant->update(['permissions' => ['dashboard.view', 'invoices.view']]);
+        $this->putJson("/api/app/team/users/{$peer->id}", ['name' => 'Renamed'])->assertOk();
+        $this->postJson("/api/app/team/users/{$peer->id}/disable")->assertOk();
+    }
+
+    public function test_manager_can_edit_own_profile_fields(): void
+    {
+        $manager = $this->teamManager();
+        $this->putJson("/api/app/team/users/{$manager->id}", ['name' => 'Me'])->assertOk();
+    }
+
     public function test_manager_cannot_assign_owner_role_to_self_or_others(): void
     {
         $manager = $this->teamManager();
