@@ -70,15 +70,15 @@ export default function AddonConfigPage() {
         subtitle={addon.description}
         actions={
           <>
-            {addon.installed ? <Badge tone="green">Installed</Badge> : <Badge>Not installed</Badge>}
-            {key === "payment_gateway" && !locked && (stripeReady(addon) ? <Badge tone="green">Ready to accept payments</Badge> : <Badge tone="amber">Not configured</Badge>)}
+            {addon.installed ? <Badge tone="green">Installed</Badge> : <Badge>{addon.pending ? "Awaiting approval" : "Not installed"}</Badge>}
+            {key === "payment_gateway" && !locked && addon.installed && (stripeReady(addon) ? <Badge tone="green">Ready to accept payments</Badge> : <Badge tone="amber">Not configured</Badge>)}
           </>
         }
       />
       {!addon.installed && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          <span>This add-on isn&apos;t installed yet. You can save settings now and install it when ready.</span>
-          <Button onClick={install} disabled={busy}>Install</Button>
+          <span>Paid add-ons are enabled by the BuildCRM team after payment confirmation. You can save settings while you wait.</span>
+          <Button onClick={install} disabled={busy || addon.pending}>{addon.pending ? "Requested" : addon.price_monthly > 0 && !addon.included_in_plan ? "Request add-on" : "Install"}</Button>
         </div>
       )}
 

@@ -34,7 +34,7 @@ function CrmShell({ children }: { children: React.ReactNode }) {
     const items = canBill ? [{ href: BILLING, label: "Subscription" }] : [];
     return (
       <Shell brand={brand} items={items}>
-        <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
+        {!onBilling && <div role="alert" className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
           <p className="text-lg font-semibold text-red-800">Your subscription is inactive</p>
           <p className="mt-1 text-sm text-red-700">
             {me?.tenant?.status === "trial" ? "Your free trial has ended." : `Account status: ${statusLabel(me?.tenant?.status ?? "")}.`}{" "}
@@ -42,7 +42,7 @@ function CrmShell({ children }: { children: React.ReactNode }) {
               ? "Choose a plan below to send a request. Your data is kept safe and everything unlocks as soon as the BuildCRM team activates your plan."
               : "Your data is safe. Ask your account owner to renew the subscription."}
           </p>
-        </div>
+        </div>}
         {canBill ? (onBilling ? children : null) : (
           <EmptyState icon="🔒" title="CRM access is paused" hint="Only account admins can renew the subscription." />
         )}

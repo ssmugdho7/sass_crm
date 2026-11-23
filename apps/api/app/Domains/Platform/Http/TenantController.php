@@ -29,7 +29,7 @@ class TenantController
             ->with(['plan:id,name,slug', 'users' => fn ($q) => $q->whereHas('role', fn ($r) => $r->where('slug', 'owner'))->select('id', 'tenant_id', 'name', 'email')])
             ->withCount('users')
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->string('status')))
-            ->when($request->boolean('pending'), fn ($q) => $q->whereNotNull('requested_plan_id'))
+            ->when($request->boolean('pending'), fn ($q) => $q->where(fn ($pending) => $pending->whereNotNull('requested_plan_id')->orWhereHas('modules', fn ($m) => $m->where('status', 'pending'))))
             ->when($request->filled('search'), function ($q) use ($request) {
                 $s = '%'.$request->string('search').'%';
                 $q->where(fn ($w) => $w->where('name', 'like', $s)->orWhere('slug', 'like', $s)->orWhere('email', 'like', $s));

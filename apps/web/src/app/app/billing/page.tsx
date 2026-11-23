@@ -7,7 +7,7 @@ import { useSession } from "@/lib/session";
 import { Badge, Button, Card, EmptyState, ErrorText, Modal, PageHeader, Spinner, Stat, cx, statusLabel } from "@/components/ui";
 
 type Cycle = "monthly" | "yearly";
-type Plan = { id: number; name: string; slug: string; price_monthly: number; price_yearly: number; max_users: number | null; included_modules: string[] | null; features: string[] | null };
+type Plan = { id: number; name: string; slug: string; price_monthly: number; price_yearly: number; max_users: number | null; included_modules: string[] | null; features: string[] | null; requires_approval: Record<Cycle, boolean> };
 type Billing = {
   plan: Plan | null;
   status: string;
@@ -74,7 +74,7 @@ function BillingView() {
   if (!data) return error ? <ErrorText error={error} /> : <Spinner />;
   const trialDays = daysLeft(data.trial_ends_at);
   const planCost = data.plan ? (data.billing_cycle === "yearly" ? Math.round(data.plan.price_yearly / 12) : data.plan.price_monthly) : 0;
-  const selfChange = data.can_self_change;
+  const selfChange = confirming ? !confirming.requires_approval[cycle] : false;
   const planError = actionError instanceof ApiError ? actionError.errors.plan?.[0] : undefined;
 
   return (
@@ -123,7 +123,7 @@ function BillingView() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Stat label="Current plan" value={<span className="flex items-center gap-2">{data.plan?.name ?? "None"} <Badge tone={statusTone[data.status] ?? "gray"}>{statusLabel(data.status)}</Badge></span>} hint={`Billed ${data.billing_cycle}`} />
         <Stat label="Estimated monthly total" value={money(planCost + data.addon_monthly_cost)} hint={`${money(planCost)} plan + ${money(data.addon_monthly_cost)} add-ons`} />
-        <Stat label={data.status === "trial" ? "Trial ends" : "Renews on"} value={formatDate(data.status === "trial" ? data.trial_ends_at : data.current_period_end)} />
+        <Stat label={data.status === "trial" ? "Trial ends" : data.status === "active" ? "Renews on" : "Subscription access"} value={data.status === "trial" ? formatDate(data.trial_ends_at) : data.status === "active" ? formatDate(data.current_period_end) : "Paused"} hint={data.status === "active" || data.status === "trial" ? undefined : "Reactivates after payment is confirmed"} />
       </div>
 
       {data.addons.length > 0 && (
@@ -137,8 +137,8 @@ function BillingView() {
       )}
 
       <p className="mt-8 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-        {selfChange
-          ? "Your subscription is active, so plan changes apply right away. Your renewal date stays the same and the difference appears on your next invoice from the BuildCRM team."
+        {data.can_self_change
+          ? "Eligible downgrades apply immediately. Upgrades and billing-cycle changes require confirmation from the BuildCRM team before access changes."
           : "No card is charged in the app. Choosing a plan sends a request to the BuildCRM team, who will invoice you and activate it once paid."}
       </p>
 
@@ -155,7 +155,7 @@ function BillingView() {
           const isPlan = data.plan?.slug === p.slug;
           const current = isPlan && data.billing_cycle === cycle && data.status === "active";
           const requested = data.requested_plan?.slug === p.slug && data.requested_cycle === cycle;
-          const label = current ? "Current plan" : requested ? "Requested" : selfChange ? `Switch to ${isPlan ? cycle : p.name}` : `Request ${p.name}`;
+          const label = current ? "Current plan" : requested ? "Requested" : !p.requires_approval[cycle] ? `Switch to ${isPlan ? cycle : p.name}` : `Request ${p.name}`;
           return (
             <div key={p.slug} className={cx("flex flex-col rounded-xl border bg-white p-5 shadow-sm", isPlan ? "border-brand-500 ring-2 ring-brand-100" : "border-slate-200")}>
               <div className="flex items-center justify-between">

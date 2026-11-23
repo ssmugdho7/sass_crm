@@ -56,7 +56,16 @@ class GoogleCalendarController extends Controller
 
     public function disconnect(): JsonResponse
     {
-        GoogleCalendarToken::query()->delete();
+        $connection = GoogleCalendarToken::first();
+        $token = $connection?->refresh_token ?: $connection?->access_token;
+        if ($token) {
+            $response = Http::asForm()->timeout(10)->post('https://oauth2.googleapis.com/revoke', ['token' => $token]);
+            // An already-invalid token needs no further revocation; other failures remain retryable.
+            if (! ($response->status() === 400 && $response->json('error') === 'invalid_token')) {
+                $response->throw();
+            }
+        }
+        $connection?->delete();
 
         return response()->json(['ok' => true]);
     }

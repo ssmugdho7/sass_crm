@@ -33,3 +33,24 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
 - `src/lib/nav.ts`: CRM sidebar entries (route, module, permission) and admin nav. Pages must exist at those routes.
 - Pages under `/app` and `/admin` are client components (`"use client"`).
 - Public tenant website: `/site/[slug]`.
+
+
+## Verified local adoption (2026-11-24)
+- PandaCode is actively developing this checkout; preserve its uncommitted work and coordinate before editing the same application files.
+- The launcher and Next.js proxy use frontend `http://127.0.0.1:3010` and API `http://127.0.0.1:8010`; these override the generic ports above. `./pandacode-run.sh` also starts the database queue worker, runs pending migrations, syncs modules, and creates the storage link.
+- Observed CLI: PHP 8.4.23, Composer 2.10.2, Node 22.23.0. Web manifest: Next.js 16.4.6, React 19.3.0, Tailwind 4.3.3. Composer requires PHP ^8.3 and Laravel ^13.17; the documented PHP 8.5 is not the current CLI.
+- Backend domains: Identity, Marketing, Account, Crm, Sales, Operations, Website, Integrations, Platform. Domain providers and migrations are discovered automatically.
+- ShopLagbe is a reference, not a shared runtime: this app uses SQLite locally, tenant_id, database roles, integer cents, separate CRM/platform tokens, and orange/slate UI. Do not copy ShopLagbe's store_id, decimal money, config-only roles, or production setup into BuildCRM.
+- Stripe collects a tenant's customer invoice payments. Google Calendar connects per tenant. Credentials live in encrypted add-on configuration; neither integration was connected or verified against external services during adoption. SaaS plan activation is a separate platform approval flow.
+- `subscriptions:enforce` is scheduled hourly in routes/console.php. The development launcher starts a queue worker but no scheduler; hosting must run Laravel's scheduler for automatic lifecycle enforcement.
+- Browser baseline: marketing page and seeded owner login/dashboard loaded successfully with demo data. Initial API run had two failures while PandaCode was editing tests; the subsequent full run passed 136 tests / 991 assertions. TypeScript and ESLint passed. This is local evidence, not a full audit or deployment verification.
+- Existing CLAUDE.md contains additional conventions; consult it alongside this file until the active author reconciles the two. Do not overwrite it during concurrent work.
+
+
+## Post-round-five verification (2026-11-24)
+- Review branch: `codex/post-round-five-review`, based on the completed round-four fixes that round five reviewed. PandaCode's later Blade/jQuery conversion is separate; do not overwrite either workstream while the frontend choice is pending.
+- The user's deployment instruction is to keep deployment pending until Bluehost provides Node support. `buildcrm.justsmartchoice.com` has been created; no app deployment was performed by this review.
+- Paid upgrades, additional seats/entitlements and billing-cycle changes need platform approval. Paid add-ons outside the plan use `tenant_modules.status=pending` until a platform admin confirms payment and enables them. Eligible downgrades, included add-ons and free add-ons still work directly.
+- The launcher now starts `schedule:work`, correcting the earlier local scheduler gap. Production still needs Laravel's minute cron and a supported queue runtime; see apps/api/README.md.
+- Current verification: 160 tests passed on an isolated MySQL instance, including real concurrent payment and first-number allocation clients. Default SQLite: 159 passed, 1 MySQL-only test skipped. TypeScript, lint, production build, Pint and secret scans passed. This does not verify live Stripe/Google or the eventual Bluehost production database.
+- Boost was installed as required by apps/api/AGENTS.md. Current review shell observed PHP 8.5.12 / Composer 2.11.1 / Laravel 13.43.0; the earlier adoption runtime observation was shell-dependent.

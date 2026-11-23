@@ -52,20 +52,20 @@ class PlanChangeTest extends AccountTestCase
         $this->assertTrue($tenant->current_period_end->isPast());
     }
 
-    public function test_active_tenant_changes_plan_without_touching_status_or_period(): void
+    public function test_active_upgrade_requests_approval_without_granting_entitlements(): void
     {
         $this->activate();
         $period = $this->tenant()->current_period_end;
         $this->actingAsOwner();
-        $this->postJson('/api/app/billing/change-plan', ['plan' => 'pro', 'cycle' => 'yearly'])->assertOk()
-            ->assertJsonPath('plan.slug', 'pro')->assertJsonPath('status', 'active')
-            ->assertJsonPath('billing_cycle', 'yearly')->assertJsonPath('requested_plan', null);
+        $this->postJson('/api/app/billing/change-plan', ['plan' => 'pro', 'cycle' => 'yearly'])->assertAccepted()
+            ->assertJsonPath('plan.slug', 'growth')->assertJsonPath('status', 'active')
+            ->assertJsonPath('billing_cycle', 'monthly')->assertJsonPath('requested_plan.slug', 'pro');
 
         $tenant = $this->tenant();
         $this->assertSame('active', $tenant->status);
         $this->assertEquals($period->getTimestamp(), $tenant->current_period_end->getTimestamp());
-        $this->assertTrue($tenant->hasModule('timesheets'));
-        $this->assertSame('plan', $this->module('timesheets')->source);
+        $this->assertFalse($tenant->hasModule('timesheets'));
+        $this->assertNull($this->module('timesheets'));
     }
 
     public function test_downgrade_disables_old_plan_modules_but_keeps_separate_addons(): void
@@ -92,7 +92,7 @@ class PlanChangeTest extends AccountTestCase
     {
         $this->assertSame('plan', $this->module('payment_gateway')->source);
         $this->actingAsOwner();
-        $this->postJson('/api/app/addons/google_calendar/install')->assertOk();
+        $this->postJson('/api/app/addons/google_calendar/install')->assertAccepted()->assertJsonPath('pending', true);
         $this->assertSame('addon', $this->module('google_calendar')->source);
         // Reinstalling an already-active plan module keeps it plan-sourced.
         $this->postJson('/api/app/addons/payment_gateway/install')->assertOk();

@@ -12,6 +12,7 @@ type Overview = {
   mrr: number;
   signups_30d: number;
   pending_plan_requests: number;
+  pending_addon_requests: number;
   recent_tenants: Tenant[];
 };
 
@@ -30,6 +31,7 @@ export default function AdminOverviewPage() {
           <span className="font-medium">Review →</span>
         </Link>
       )}
+      {data.pending_addon_requests > 0 && <Link href="/admin/tenants?pending=1" className="mb-4 block rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">{data.pending_addon_requests} paid add-on requests awaiting confirmation — Review →</Link>}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <Stat label="MRR" value={money(data.mrr)} hint="Active accounts, yearly plans ÷ 12" />
         <Stat label="CRM accounts" value={data.tenants.total} />

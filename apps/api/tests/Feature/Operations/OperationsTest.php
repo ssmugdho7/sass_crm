@@ -6,6 +6,7 @@ use App\Domains\Identity\Actions\RegisterTenant;
 use App\Domains\Operations\Database\DemoSeeder;
 use App\Domains\Operations\Models\Appointment;
 use App\Domains\Operations\Models\Timesheet;
+use App\Domains\Website\Actions\EnsureSiteSettings;
 use App\Events\AppointmentSaved;
 use App\Models\Lead;
 use App\Models\Project;
@@ -88,6 +89,7 @@ class OperationsTest extends TestCase
         Event::fake([AppointmentSaved::class]);
         $user = $this->owner();
         $slug = $user->tenant->slug;
+        app(EnsureSiteSettings::class)($user->tenant)->update(['published' => true]);
 
         $this->postJson("/api/public/sites/{$slug}/bookings", [
             'name' => 'Jane Doe', 'email' => 'jane@example.test', 'phone' => '555', 'service' => 'Deck build',
@@ -231,5 +233,33 @@ class OperationsTest extends TestCase
         $tid = User::where('email', 'owner@demo.test')->value('tenant_id');
         $this->assertSame(2, Appointment::withoutGlobalScope('tenant')->where('tenant_id', $tid)->count());
         $this->assertSame(4, TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $tid)->whereIn('module_key', self::MODULES)->count());
+    }
+
+    public function test_public_booking_rejects_unpublished_site_without_creating_records(): void
+    {
+        Event::fake([AppointmentSaved::class]);
+        $user = $this->owner();
+        app(EnsureSiteSettings::class)($user->tenant)->update(['published' => false]);
+        $this->postJson('/api/public/sites/'.$user->tenant->slug.'/bookings', [
+            'name' => 'Jane', 'email' => 'jane@example.test', 'preferred_at' => now()->addDay()->toDateTimeString(),
+        ])->assertNotFound();
+        $this->assertSame(0, Lead::withoutGlobalScope('tenant')->where('tenant_id', $user->tenant_id)->count());
+        $this->assertSame(0, Appointment::withoutGlobalScope('tenant')->where('tenant_id', $user->tenant_id)->count());
+        Event::assertNotDispatched(AppointmentSaved::class);
+    }
+
+    public function test_timesheet_summary_preserves_per_entry_cent_rounding(): void
+    {
+        $owner = $this->owner();
+        Sanctum::actingAs($owner, ['crm']);
+        foreach ([1, 2] as $day) {
+            $this->postJson('/api/app/timesheets', [
+                'work_date' => '2026-11-0'.$day, 'hours' => 0.5, 'hourly_rate' => 1,
+            ])->assertCreated();
+        }
+        $this->getJson('/api/app/timesheets/summary')->assertOk()
+            ->assertJsonPath('total_hours', 1)->assertJsonPath('total_cost', 2)
+            ->assertJsonPath('by_project.0.name', 'No project')->assertJsonPath('by_project.0.cost', 2)
+            ->assertJsonPath('by_user.0.id', $owner->id)->assertJsonPath('by_user.0.cost', 2);
     }
 }

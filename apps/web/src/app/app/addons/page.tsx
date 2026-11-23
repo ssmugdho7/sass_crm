@@ -48,7 +48,7 @@ function AddonsList() {
 
   return (
     <div>
-      <PageHeader title="Add-ons" subtitle="Extend BuildCRM with the tools your business needs. Install or remove them any time." />
+      <PageHeader title="Add-ons" subtitle="Extend BuildCRM with the tools your business needs. Request paid add-ons for approval, or manage installed tools." />
       <ErrorText error={error} />
       {!addons ? (
         error ? null : <Spinner />
@@ -65,6 +65,7 @@ function AddonsList() {
                   </div>
                 </div>
                 {a.installed && <Badge tone="green">Installed</Badge>}
+                {a.pending && <Badge tone="amber">Awaiting approval</Badge>}
               </div>
               <p className="mt-2 flex-1 text-sm text-slate-600">{a.description}</p>
               {!a.included_in_plan && (
@@ -76,8 +77,8 @@ function AddonsList() {
                 {a.installed && a.included_in_plan ? null : a.key === "payment_gateway" && !canPayments ? (
                   <span className="text-sm text-slate-500">Needs the payments permission</span>
                 ) : (
-                  <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>
-                    {busy === a.key ? "Working…" : a.installed ? "Uninstall" : "Install"}
+                  <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key || a.pending} onClick={() => toggle(a)}>
+                    {busy === a.key ? "Working…" : a.installed ? "Uninstall" : a.pending ? "Requested" : a.price_monthly > 0 && !a.included_in_plan ? "Request add-on" : "Install"}
                   </Button>
                 )}
                 {a.installed && a.configurable && (a.key !== "payment_gateway" || canPayments) && (

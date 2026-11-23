@@ -19,6 +19,8 @@ class PublicBookingController extends Controller
         $tenant = Tenant::where('slug', $slug)->first();
         abort_unless($tenant && $tenant->isAccessible() && $tenant->hasModule('appointments'), 404);
 
+        abort_unless(DB::table('site_settings')->where('tenant_id', $tenant->id)->where('published', true)->exists(), 404);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],

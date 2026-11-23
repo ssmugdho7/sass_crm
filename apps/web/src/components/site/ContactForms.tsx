@@ -87,7 +87,7 @@ export function QuoteForm({ slug, services }: { slug: string; services: string[]
       </div>
       <F label="Tell us about your project" name="message" errors={s.errors}><textarea name="message" rows={4} maxLength={5000} className={input} /></F>
       <Status done={s.done} error={s.error} />
-      <button disabled={s.busy} className="w-full rounded-lg bg-[var(--accent)] px-5 py-3 font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60">
+      <button disabled={s.busy} className="w-full rounded-lg bg-[var(--accent)] px-5 py-3 font-semibold text-[var(--on-accent)] shadow-sm transition hover:brightness-95 disabled:opacity-60">
         {s.busy ? "Sending…" : "Get my free quote"}
       </button>
       <p className="text-center text-xs text-slate-500">Please give us an email or phone number so we can reply.</p>

@@ -24,17 +24,23 @@ class TimesheetController extends Controller
     /** Hours and labour cost per project and per user for the filtered range. */
     public function summary(Request $request)
     {
-        $rows = $this->filtered($request)->with(['user:id,name', 'project:id,name'])->get();
-        $group = fn (string $key, callable $label) => $rows->groupBy($key)->map(fn ($g) => [
-            'id' => $g->first()->{$key}, 'name' => $label($g->first()),
-            'hours' => round($g->sum('hours'), 2), 'cost' => (int) $g->sum(fn ($t) => self::cost($t)),
-        ])->values();
+        $totals = $this->filtered($request)
+            ->selectRaw('COALESCE(SUM(hours), 0) as hours, COALESCE(SUM(ROUND(hours * COALESCE(hourly_rate, 0), 0)), 0) as cost')->first();
+        $group = function (string $key, string $relation, string $fallback) use ($request) {
+            return $this->filtered($request)->select($key)
+                ->selectRaw('SUM(hours) as hours, SUM(ROUND(hours * COALESCE(hourly_rate, 0), 0)) as cost')
+                ->groupBy($key)->with($relation.':id,name')->get()
+                ->map(fn ($row) => [
+                    'id' => $row->{$key}, 'name' => $row->{$relation}?->name ?? $fallback,
+                    'hours' => round((float) $row->hours, 2), 'cost' => (int) $row->cost,
+                ]);
+        };
 
         return [
-            'total_hours' => round($rows->sum('hours'), 2),
-            'total_cost' => (int) $rows->sum(fn ($t) => self::cost($t)),
-            'by_project' => $group('project_id', fn ($t) => $t->project?->name ?? 'No project'),
-            'by_user' => $group('user_id', fn ($t) => $t->user?->name ?? 'Unknown'),
+            'total_hours' => round((float) $totals->hours, 2),
+            'total_cost' => (int) $totals->cost,
+            'by_project' => $group('project_id', 'project', 'No project'),
+            'by_user' => $group('user_id', 'user', 'Unknown'),
         ];
     }
 

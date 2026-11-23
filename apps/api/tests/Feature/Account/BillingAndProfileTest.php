@@ -10,7 +10,9 @@ class BillingAndProfileTest extends AccountTestCase
     public function test_billing_overview_reports_addon_cost(): void
     {
         $this->actingAsOwner();
-        $this->postJson('/api/app/addons/timesheets/install')->assertOk();
+        $this->postJson('/api/app/addons/timesheets/install')->assertAccepted();
+        $this->getJson('/api/app/billing')->assertJsonPath('addon_monthly_cost', 0);
+        $this->approveAddon('timesheets');
         $this->getJson('/api/app/billing')->assertOk()
             ->assertJsonPath('plan.slug', 'growth')
             ->assertJsonPath('status', 'trial')

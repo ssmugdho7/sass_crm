@@ -21,7 +21,8 @@ class RoleTest extends AccountTestCase
         $this->postJson('/api/app/team/roles', ['name' => 'Estimator', 'permissions' => ['estimates.view', 'bogus.perm']])
             ->assertUnprocessable();
 
-        $this->postJson('/api/app/addons/timesheets/install')->assertOk();
+        $this->postJson('/api/app/addons/timesheets/install')->assertAccepted();
+        $this->approveAddon('timesheets');
         $this->postJson('/api/app/team/roles', ['name' => 'Estimator', 'permissions' => ['estimates.view', 'timesheets.view']])
             ->assertCreated()->assertJsonPath('slug', 'estimator');
         $this->postJson('/api/app/team/roles', ['name' => 'Admin', 'permissions' => ['*']])->assertCreated();

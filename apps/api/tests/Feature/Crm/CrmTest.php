@@ -215,4 +215,31 @@ class CrmTest extends TestCase
         $this->assertSame(7500, $res->json('stats.unpaid_invoices'));
         $this->assertTrue($res->json('onboarding.has_customers'));
     }
+
+    public function test_dashboard_does_not_disclose_sales_or_finances_to_field_crew(): void
+    {
+        $this->seed(DemoSeeder::class);
+        Sanctum::actingAs($this->crew($this->owner()), ['crm']);
+        $this->getJson('/api/app/dashboard')->assertOk()
+            ->assertJsonPath('stats.open_leads', null)
+            ->assertJsonPath('stats.pipeline_value', null)
+            ->assertJsonPath('stats.revenue_this_month', null)
+            ->assertJsonPath('stats.unpaid_invoices', null)
+            ->assertJsonCount(0, 'recent_leads')
+            ->assertJsonPath('onboarding.has_leads', false)
+            ->assertJsonPath('onboarding.website_services', 0);
+    }
+
+    public function test_dashboard_only_role_receives_no_task_or_project_data(): void
+    {
+        $crew = $this->crew($this->owner());
+        $crew->role->update(['permissions' => ['dashboard.view']]);
+        Sanctum::actingAs($crew, ['crm']);
+        $this->getJson('/api/app/dashboard')->assertOk()
+            ->assertJsonPath('stats.active_projects', null)
+            ->assertJsonPath('stats.open_tasks', null)
+            ->assertJsonPath('stats.overdue_tasks', null)
+            ->assertJsonCount(0, 'upcoming_tasks')
+            ->assertJsonCount(0, 'projects_by_status');
+    }
 }

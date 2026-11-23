@@ -46,7 +46,7 @@ export function PlanCards({ plans, addonNames }: { plans: PublicPlan[]; addonNam
               className={`relative flex flex-col rounded-2xl bg-white p-7 shadow-sm ring-1 ${hot ? "ring-2 ring-brand-500 shadow-lg" : "ring-slate-200"}`}
             >
               {hot && (
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-600 px-3 py-1 text-xs font-semibold text-white">
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-700 px-3 py-1 text-xs font-semibold text-white">
                   Most popular
                 </span>
               )}
@@ -73,7 +73,7 @@ export function PlanCards({ plans, addonNames }: { plans: PublicPlan[]; addonNam
               </ul>
               <Link
                 href={`/register?plan=${p.slug}`}
-                className={`mt-8 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition ${hot ? "bg-brand-600 text-white hover:bg-brand-700" : "bg-slate-900 text-white hover:bg-slate-800"}`}
+                className={`mt-8 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition ${hot ? "bg-brand-700 text-white hover:bg-brand-900" : "bg-slate-900 text-white hover:bg-slate-800"}`}
               >
                 Start 14-day free trial
               </Link>

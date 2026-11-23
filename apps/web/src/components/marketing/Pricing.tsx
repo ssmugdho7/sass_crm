@@ -17,7 +17,7 @@ export async function Pricing({ showAddons = false }: { showAddons?: boolean }) 
       <div className="mx-auto max-w-md rounded-2xl bg-white p-8 text-center ring-1 ring-slate-200">
         <p className="font-semibold text-slate-900">Pricing is temporarily unavailable.</p>
         <p className="mt-2 text-sm text-slate-600">Every plan starts with a 14-day free trial — no credit card required.</p>
-        <Link href="/register" className="mt-6 inline-flex rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+        <Link href="/register" className="mt-6 inline-flex rounded-lg bg-brand-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-900">
           Start your free trial
         </Link>
       </div>

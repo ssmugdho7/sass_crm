@@ -4,6 +4,7 @@ namespace Tests\Feature\Account;
 
 use App\Models\Module;
 use App\Models\TenantModule;
+use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
 class AddonTest extends AccountTestCase
@@ -34,7 +35,9 @@ class AddonTest extends AccountTestCase
     public function test_install_and_uninstall_keeps_config(): void
     {
         $this->actingAsOwner();
-        $this->postJson('/api/app/addons/google_calendar/install')->assertOk()->assertJsonPath('installed', true);
+        $this->postJson('/api/app/addons/google_calendar/install')->assertAccepted()->assertJsonPath('installed', false)->assertJsonPath('pending', true);
+        $this->assertFalse($this->tenant()->hasModule('google_calendar'));
+        $this->approveAddon('google_calendar');
         $this->assertTrue($this->tenant()->hasModule('google_calendar'));
 
         $this->putJson('/api/app/addons/google_calendar/config', ['client_id' => 'abc', 'client_secret' => 'supersecret1234'])->assertOk();
@@ -45,7 +48,7 @@ class AddonTest extends AccountTestCase
         $this->assertSame('disabled', $row->status);
         $this->assertSame('supersecret1234', $row->config['client_secret']);
 
-        $this->postJson('/api/app/addons/google_calendar/install')->assertOk();
+        $this->postJson('/api/app/addons/google_calendar/install')->assertAccepted();
         $this->assertSame('abc', $row->fresh()->config['client_id']);
     }
 
@@ -78,5 +81,26 @@ class AddonTest extends AccountTestCase
         Sanctum::actingAs($this->makeUser('field-crew'), ['crm']);
         $this->getJson('/api/app/addons')->assertForbidden();
         $this->postJson('/api/app/addons/timesheets/install')->assertForbidden();
+    }
+
+    public function test_paid_addon_request_is_visible_to_platform_and_only_approval_enables_it(): void
+    {
+        $this->actingAsOwner();
+        $this->postJson('/api/app/addons/timesheets/install')->assertAccepted()->assertJsonPath('pending', true);
+        $this->postJson('/api/app/addons/timesheets/install')->assertAccepted()->assertJsonPath('installed', false);
+        $this->getJson('/api/app/timesheets')->assertForbidden();
+        Sanctum::actingAs(User::where('is_super_admin', true)->firstOrFail(), ['platform']);
+        $this->getJson('/api/platform/overview')->assertOk()->assertJsonPath('pending_addon_requests', 1);
+        $this->getJson('/api/platform/tenants?pending=1')->assertOk()->assertJsonPath('data.0.id', $this->tenant()->id);
+        $this->approveAddon('timesheets');
+        $this->getJson('/api/app/timesheets')->assertOk();
+        $this->getJson('/api/app/addons/timesheets')->assertJsonPath('pending', false)->assertJsonPath('installed', true);
+    }
+
+    public function test_free_addon_can_be_installed_without_approval(): void
+    {
+        Module::where('key', 'timesheets')->firstOrFail()->update(['price_monthly' => 0]);
+        $this->actingAsOwner();
+        $this->postJson('/api/app/addons/timesheets/install')->assertOk()->assertJsonPath('installed', true)->assertJsonPath('pending', false);
     }
 }

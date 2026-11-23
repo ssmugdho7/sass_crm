@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ConcurrencyTest extends SalesTestCase
 {
@@ -137,5 +138,21 @@ class ConcurrencyTest extends SalesTestCase
         // Deleting the same payment again (double click / concurrent request) must not subtract twice.
         app(DeletePayment::class)($p1);
         $this->assertSame(20000, (int) $invoice->fresh()->amount_paid);
+    }
+
+    public function test_manual_payment_rechecks_stale_balance_and_rejects_without_partial_credit(): void
+    {
+        $invoice = $this->invoice(50000);
+        $stale = Invoice::withoutGlobalScope('tenant')->findOrFail($invoice->id);
+        $record = app(RecordPayment::class);
+        $record($invoice, 45000, 'cash');
+        try {
+            $record($stale, 10000, 'check', rejectOverpayment: true);
+            $this->fail('A stale manual payment must not exceed the current balance.');
+        } catch (ValidationException $e) {
+            $this->assertSame(['The amount cannot exceed the balance due.'], $e->errors()['amount']);
+        }
+        $this->assertSame(45000, (int) $invoice->fresh()->amount_paid);
+        $this->assertSame(1, Payment::withoutGlobalScope('tenant')->where('invoice_id', $invoice->id)->count());
     }
 }

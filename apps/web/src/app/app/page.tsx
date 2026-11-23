@@ -9,8 +9,8 @@ import { isOverdue, tone, type Lead, type Task } from "./projects/_crm/shared";
 
 type Dashboard = {
   stats: {
-    open_leads: number; pipeline_value: number; active_projects: number; open_tasks: number;
-    overdue_tasks: number; unpaid_invoices: number; revenue_this_month: number;
+    open_leads: number | null; pipeline_value: number | null; active_projects: number | null; open_tasks: number | null;
+    overdue_tasks: number | null; unpaid_invoices: number | null; revenue_this_month: number | null;
   };
   recent_leads: Lead[];
   upcoming_tasks: Task[];
@@ -102,10 +102,10 @@ export default function DashboardPage() {
         <div className="space-y-6">
           {data.onboarding && <GettingStarted me={me} onboarding={data.onboarding} />}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Open leads" value={data.stats.open_leads} hint={`${money(data.stats.pipeline_value)} in pipeline`} />
-            <Stat label="Active projects" value={data.stats.active_projects} hint="Planning or in progress" />
-            <Stat label="Open tasks" value={data.stats.open_tasks} hint={data.stats.overdue_tasks ? `${data.stats.overdue_tasks} overdue` : "None overdue"} />
-            <Stat label="Revenue this month" value={money(data.stats.revenue_this_month)} hint={`${money(data.stats.unpaid_invoices)} unpaid`} />
+            {data.stats.open_leads !== null && <Stat label="Open leads" value={data.stats.open_leads} hint={`${money(data.stats.pipeline_value ?? 0)} in pipeline`} />}
+            {data.stats.active_projects !== null && <Stat label="Active projects" value={data.stats.active_projects} hint="Planning or in progress" />}
+            {data.stats.open_tasks !== null && <Stat label="Open tasks" value={data.stats.open_tasks} hint={data.stats.overdue_tasks ? `${data.stats.overdue_tasks} overdue` : "None overdue"} />}
+            {data.stats.revenue_this_month !== null && <Stat label="Revenue this month" value={money(data.stats.revenue_this_month)} hint={`${money(data.stats.unpaid_invoices ?? 0)} unpaid`} />}
           </div>
 
           {quick.length > 0 && (
@@ -117,8 +117,8 @@ export default function DashboardPage() {
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {can(me, "leads.view") && (
-              <Card title="Recent leads" actions={<Link href="/app/leads" className="text-sm text-brand-700 hover:underline">View all</Link>}>
+            {can(me, "leads.view") && hasModule(me, "leads") && (
+              <Card title="Recent leads" actions={<Link href="/app/leads" aria-label="View all leads" className="text-sm text-brand-700 hover:underline">View all</Link>}>
                 {data.recent_leads.length ? (
                   <ul className="divide-y divide-slate-100">
                     {data.recent_leads.map((l) => (
@@ -138,7 +138,7 @@ export default function DashboardPage() {
               </Card>
             )}
 
-            <Card title="Upcoming tasks" actions={can(me, "tasks.view") && <Link href="/app/tasks" className="text-sm text-brand-700 hover:underline">View all</Link>}>
+            {can(me, "tasks.view") && hasModule(me, "tasks") && <Card title="Upcoming tasks" actions={can(me, "tasks.view") && <Link href="/app/tasks" aria-label="View all tasks" className="text-sm text-brand-700 hover:underline">View all</Link>}>
               {data.upcoming_tasks.length ? (
                 <ul className="divide-y divide-slate-100">
                   {data.upcoming_tasks.map((t) => (
@@ -154,10 +154,10 @@ export default function DashboardPage() {
                   ))}
                 </ul>
               ) : <p className="text-sm text-slate-500">Nothing scheduled.</p>}
-            </Card>
+            </Card>}
 
             {Object.values(data.projects_by_status).some((n) => n > 0) && (
-            <Card title="Projects by status" actions={can(me, "projects.view") && <Link href="/app/projects" className="text-sm text-brand-700 hover:underline">View all</Link>}>
+            <Card title="Projects by status" actions={can(me, "projects.view") && <Link href="/app/projects" aria-label="View all projects" className="text-sm text-brand-700 hover:underline">View all</Link>}>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {STATUS_ORDER.map((s) => (
                   <Link key={s} href={`/app/projects?status=${s}`} className="rounded-lg border border-slate-200 p-3 text-center hover:bg-slate-50">

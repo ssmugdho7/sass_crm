@@ -26,17 +26,19 @@ class AddonController
 
     public function install(Request $request, string $key)
     {
-        AddonCatalog::find($key);
+        $addon = AddonCatalog::find($key);
         $this->ensurePaymentAccess($request, $key);
+        $tenant = CurrentTenant::get()->load('plan');
         $module = TenantModule::firstOrNew(['module_key' => $key]);
-        // An add-on the plan already provides stays plan-sourced; otherwise it was installed separately.
-        if (! ($module->exists && $module->status === 'active' && $module->source === 'plan')) {
-            $module->source = 'addon';
+        if ($module->exists && $module->status === 'active') {
+            return $this->present($key);
         }
-        $module->status = 'active';
+        $included = in_array($key, $tenant->plan?->included_modules ?? [], true);
+        $module->source = $included ? 'plan' : 'addon';
+        $module->status = ! $included && $addon['price_monthly'] > 0 ? 'pending' : 'active';
         $module->save();
 
-        return $this->present($key);
+        return response()->json($this->present($key), $module->status === 'pending' ? 202 : 200);
     }
 
     public function uninstall(Request $request, string $key)

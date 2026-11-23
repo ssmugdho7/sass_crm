@@ -1,3 +1,13 @@
+# BuildCRM web
+
+Next.js 16 / React 19 / Tailwind 4 frontend. Run `./pandacode-run.sh` from the repository root for the complete local app at `http://127.0.0.1:3010`; the API runs on 8010. From this directory use `npx tsc --noEmit`, `npm run lint`, and `npm run build` for checks.
+
+`API_URL` is server-only and controls `/api/*` rewrites plus server-side marketing/public-site reads. Set it when building and running the production server. Dynamic tenant sites and document routes require a supported Next.js server; the current app is not a static export.
+
+Deployment remains pending until Bluehost provides Node support. The reserved frontend address is `buildcrm.justsmartchoice.com`; do not replace Next.js to work around the current host limitation. Backend scheduler, worker, secrets, and integration requirements are recorded in `../api/README.md`.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Self-service plan change. Payment collection is not implemented, so this fails closed:
- * - Paid-up ('active') tenants switch plan/cycle immediately via ApplyPlan; status and current_period_end are untouched.
- * - Any other status only records the request; the BuildCRM team approves it after payment (platform portal).
+ * - Active tenants can downgrade immediately without changing the current billing period.
+ * - Upgrades, cycle changes and any other status only record the request; the BuildCRM team approves it after payment (platform portal).
  */
 class ChangePlan
 {
@@ -22,7 +22,7 @@ class ChangePlan
             $locked = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
             ApplyPlan::ensureSeatsFit($locked, $plan);
 
-            if ($locked->status !== 'active') {
+            if (self::requiresApproval($locked, $plan, $cycle)) {
                 $locked->update(['requested_plan_id' => $plan->id, 'requested_cycle' => $cycle, 'plan_requested_at' => now()]);
 
                 return 'requested';
@@ -32,5 +32,19 @@ class ChangePlan
 
             return 'changed';
         });
+    }
+
+    /** New cost, seats, modules or billing terms require platform confirmation before granting access. */
+    public static function requiresApproval(Tenant $tenant, Plan $plan, string $cycle): bool
+    {
+        $current = $tenant->plan;
+        if ($tenant->status !== 'active' || ! $current || $cycle !== $tenant->billing_cycle) {
+            return true;
+        }
+        $price = $cycle === 'yearly' ? 'price_yearly' : 'price_monthly';
+
+        return $plan->{$price} > $current->{$price}
+            || ($current->max_users !== null && ($plan->max_users === null || $plan->max_users > $current->max_users))
+            || array_diff($plan->included_modules ?? [], $current->included_modules ?? []) !== [];
     }
 }
