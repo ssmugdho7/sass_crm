@@ -35,11 +35,14 @@ Route::middleware(['auth:sanctum', 'tenant'])->prefix('app')->group(function () 
         Route::put('addons/{key}/config', [AddonController::class, 'updateConfig']);
 
         Route::put('account/company', [AccountController::class, 'updateCompany']);
-
-        Route::get('billing', [BillingController::class, 'show']);
-        Route::post('billing/change-plan', [BillingController::class, 'changePlan']);
     });
 
     Route::get('account/company', [AccountController::class, 'company']);
     Route::put('account/profile', [AccountController::class, 'updateProfile']);
+});
+
+// Billing stays reachable for suspended / past-due / expired-trial tenants so the owner can request a plan.
+Route::middleware(['auth:sanctum', 'tenant:billing', 'perm:account.manage'])->prefix('app')->group(function () {
+    Route::get('billing', [BillingController::class, 'show']);
+    Route::post('billing/change-plan', [BillingController::class, 'changePlan']);
 });

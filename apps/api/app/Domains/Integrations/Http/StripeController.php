@@ -30,7 +30,10 @@ class StripeController extends Controller
             return $this->fail('Online payment is not available for this invoice.');
         }
         $balance = (int) $invoice->total - (int) $invoice->amount_paid;
-        if ($balance <= 0 || in_array($invoice->status, ['void', 'paid'], true)) {
+        if (in_array($invoice->status, ['draft', 'void'], true)) {
+            return $this->fail('This invoice is not open for payment.');
+        }
+        if ($balance <= 0 || $invoice->status === 'paid') {
             return $this->fail('This invoice has nothing left to pay.');
         }
 
@@ -90,12 +93,11 @@ class StripeController extends Controller
             $currency = strtolower((string) ($session['currency'] ?? $expected));
             if ($currency !== $expected) {
                 Log::warning('Stripe session currency mismatch ignored', ['tenant' => $tenant->id, 'session' => $reference, 'currency' => $currency, 'expected' => $expected]);
+            } elseif ($invoice && $invoice->status === 'void') {
+                Log::warning('Stripe payment for void invoice ignored', ['tenant' => $tenant->id, 'invoice' => $invoice->id, 'session' => $reference]);
             } elseif ($invoice && $reference !== '') {
-                // Never record more than is still owed (RecordPayment dedupes repeated deliveries by reference).
-                $amount = min((int) ($session['amount_total'] ?? 0), (int) $invoice->total - (int) $invoice->amount_paid);
-                if ($amount > 0) {
-                    $record($invoice, $amount, 'stripe', $reference);
-                }
+                // Clamped to the balance under the invoice row lock; repeated deliveries dedupe on the session id.
+                $record($invoice, (int) ($session['amount_total'] ?? 0), 'stripe', $reference, capToBalance: true);
             }
         }
 

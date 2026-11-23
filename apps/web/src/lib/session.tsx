@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, tokens, type Me, type Realm } from "./api";
+import { SUBSCRIPTION_INACTIVE, api, tokens, type Me, type Realm } from "./api";
 
 type Session = { me: Me | null; loading: boolean; refresh: () => Promise<void>; logout: () => Promise<void> };
 const Ctx = createContext<Session>({ me: null, loading: true, refresh: async () => {}, logout: async () => {} });
@@ -38,6 +38,14 @@ export function SessionProvider({ realm, loginPath, children }: { realm: Realm; 
   useEffect(() => {
     queueMicrotask(refresh);
   }, [refresh]);
+
+  // A 402 mid-session means the subscription lapsed: reload `me` so the layout switches to the billing-only shell.
+  useEffect(() => {
+    if (realm !== "crm") return;
+    const onInactive = () => void refresh();
+    window.addEventListener(SUBSCRIPTION_INACTIVE, onInactive);
+    return () => window.removeEventListener(SUBSCRIPTION_INACTIVE, onInactive);
+  }, [realm, refresh]);
 
   return <Ctx.Provider value={{ me, loading, refresh, logout }}>{children}</Ctx.Provider>;
 }

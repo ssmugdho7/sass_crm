@@ -23,8 +23,12 @@ class DemoSeeder extends Seeder
         }
         $tid = $tenant->id;
 
+        $planKeys = $tenant->plan?->included_modules ?? [];
         foreach (['appointments', 'subcontractors', 'timesheets', 'expenses'] as $key) {
-            TenantModule::withoutGlobalScope('tenant')->firstOrCreate(['tenant_id' => $tid, 'module_key' => $key], ['status' => 'active']);
+            TenantModule::withoutGlobalScope('tenant')->firstOrCreate(
+                ['tenant_id' => $tid, 'module_key' => $key],
+                ['status' => 'active', 'source' => in_array($key, $planKeys, true) ? 'plan' : 'addon'],
+            );
         }
 
         $owner = User::where('tenant_id', $tid)->orderBy('id')->first();

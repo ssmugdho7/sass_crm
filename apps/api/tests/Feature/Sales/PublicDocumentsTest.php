@@ -7,14 +7,19 @@ use App\Support\Tenancy\CurrentTenant;
 
 class PublicDocumentsTest extends SalesTestCase
 {
-    private function create(string $type): array
+    private function create(string $type, string $status = 'sent'): array
     {
         $owner = $this->actingAsOwner();
 
-        return $this->postJson("/api/app/{$type}", [
+        $doc = $this->postJson("/api/app/{$type}", [
             'customer_id' => $this->customerFor($owner->tenant)->id,
             'items' => [['description' => 'Siding', 'quantity' => 2, 'unit_price' => 5000]],
         ])->assertCreated()->json();
+        if ($status !== 'draft') {
+            $this->postJson("/api/app/{$type}/{$doc['id']}/status", ['status' => $status])->assertOk();
+        }
+
+        return $doc;
     }
 
     private function asGuest(): void
@@ -63,9 +68,20 @@ class PublicDocumentsTest extends SalesTestCase
         $this->asGuest();
 
         $this->getJson("/api/public/estimates/{$a['public_token']}")->assertOk()
-            ->assertJsonPath('document.type', 'estimate')->assertJsonPath('document.status', 'draft');
+            ->assertJsonPath('document.type', 'estimate')->assertJsonPath('document.status', 'sent');
         $this->postJson("/api/public/estimates/{$a['public_token']}/accept")->assertOk()->assertJsonPath('document.status', 'accepted');
         $this->postJson("/api/public/estimates/{$a['public_token']}/decline")->assertStatus(422);
         $this->postJson("/api/public/estimates/{$b['public_token']}/decline")->assertOk()->assertJsonPath('document.status', 'declined');
+    }
+
+    public function test_draft_documents_are_not_public(): void
+    {
+        $inv = $this->create('invoices', 'draft');
+        $est = $this->create('estimates', 'draft');
+        $this->asGuest();
+
+        $this->getJson("/api/public/invoices/{$inv['public_token']}")->assertNotFound();
+        $this->getJson("/api/public/estimates/{$est['public_token']}")->assertNotFound();
+        $this->postJson("/api/public/estimates/{$est['public_token']}/accept")->assertNotFound();
     }
 }

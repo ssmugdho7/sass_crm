@@ -11,6 +11,8 @@ export type Me = {
     name: string;
     slug: string;
     status: string;
+    /** false when suspended / past the trial: only the billing page works until a plan is approved. */
+    accessible: boolean;
     trial_ends_at: string | null;
     plan: { id: number; name: string; slug: string } | null;
     modules: string[];
@@ -22,6 +24,9 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
+/** Window event fired when a CRM request gets 402 (subscription inactive). */
+export const SUBSCRIPTION_INACTIVE = "crm:subscription-inactive";
 
 const KEY = { crm: "crm_token", platform: "platform_token" } as const;
 export type Realm = keyof typeof KEY;
@@ -48,6 +53,10 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     if (res.status === 401 && opts.realm) tokens.clear(opts.realm);
+    // Inactive subscription: the CRM session reloads `me` and the /app layout routes to billing (no loop on billing itself).
+    if (res.status === 402 && opts.realm === "crm" && typeof window !== "undefined" && !window.location.pathname.startsWith("/app/billing")) {
+      window.dispatchEvent(new Event(SUBSCRIPTION_INACTIVE));
+    }
     throw new ApiError(res.status, data.message ?? "Request failed", data.errors ?? {});
   }
   return data as T;
@@ -76,4 +85,19 @@ export const formatDate = (value: string | null | undefined, withTime = false) =
   const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
   if (Number.isNaN(d.getTime())) return value;
   return d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", ...(withTime ? { hour: "numeric", minute: "2-digit" } : {}) });
+};
+
+const pad = (n: number) => String(n).padStart(2, "0");
+/** ISO datetime → local "yyyy-mm-dd" for <input type="date"> (same calendar day formatDate shows). */
+export const toDateInput = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+/** "yyyy-mm-dd" from a date input → ISO of 23:59:59 local time that day (null when blank). */
+export const fromDateInput = (value: string | null | undefined) => {
+  if (!value) return null;
+  const d = new Date(`${value}T23:59:59`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };

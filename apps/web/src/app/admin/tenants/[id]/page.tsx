@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { formatDate, money, platform } from "@/lib/api";
+import { formatDate, fromDateInput, money, platform, toDateInput } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Select, Spinner, Table, cx, fieldError, statusLabel } from "@/components/ui";
 import {
@@ -88,7 +88,6 @@ export default function TenantDetailPage() {
   );
 }
 
-const dateInput = (d: string | null) => (d ? d.slice(0, 10) : "");
 /** Formatted echo of a yyyy-mm-dd input so admin dates read the same as everywhere else. */
 const DateHint = ({ value }: { value: string }) =>
   value ? <span className="mt-1 block text-xs text-slate-500">{formatDate(value)}</span> : null;
@@ -140,7 +139,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
   const { data: plans } = useFetch<Plan[]>("/platform/plans", "platform");
   const [form, setForm] = useState({
     name: tenant.name, slug: tenant.slug, email: tenant.email ?? "", phone: tenant.phone ?? "", plan_id: tenant.plan_id ? String(tenant.plan_id) : "",
-    status: tenant.status, billing_cycle: tenant.billing_cycle, trial_ends_at: dateInput(tenant.trial_ends_at), current_period_end: dateInput(tenant.current_period_end),
+    status: tenant.status, billing_cycle: tenant.billing_cycle, trial_ends_at: toDateInput(tenant.trial_ends_at), current_period_end: toDateInput(tenant.current_period_end),
   });
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -156,7 +155,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
         method: "PUT",
         body: {
           ...form, email: form.email || null, phone: form.phone || null, plan_id: form.plan_id ? Number(form.plan_id) : undefined,
-          trial_ends_at: form.trial_ends_at || null, current_period_end: form.current_period_end || null,
+          trial_ends_at: fromDateInput(form.trial_ends_at), current_period_end: fromDateInput(form.current_period_end),
         },
       });
       setSaved(true);

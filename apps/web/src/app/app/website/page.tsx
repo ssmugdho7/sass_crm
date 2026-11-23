@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { crm } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
@@ -175,14 +175,7 @@ function WebsiteBuilderPage() {
       <ProgressCard checklist={checklist} published={settings.published} url={liveUrl} onPick={(i) => goTo(itemTab(i))} />
 
       <div ref={tabsRef} className="scroll-mt-4 space-y-3">
-        <div className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 px-1" role="tablist" aria-label="Website sections">
-          {TABS.map(([k, label]) => (
-            <button key={k} type="button" role="tab" data-tab={k} aria-selected={tab === k} onClick={() => setTab(k)}
-              className={`shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-4 py-2.5 text-sm font-medium transition ${focusRing} ${tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <TabStrip tab={tab} onPick={setTab} />
         {liveUrl && (
           <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <p className="text-slate-500">
@@ -263,6 +256,56 @@ function WebsiteBuilderPage() {
             { key: "question", label: "Question", required: true },
             { key: "answer", label: "Answer", type: "textarea", required: true },
           ]} />
+      )}
+    </div>
+  );
+}
+
+/** Section tabs. On narrow screens the strip scrolls sideways, so show a fade + "More" cue and keep the active tab in view. */
+function TabStrip({ tab, onPick }: { tab: Tab; onPick: (t: Tab) => void }) {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const measure = useCallback(() => {
+    const el = stripRef.current;
+    if (el) setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [measure]);
+
+  useEffect(() => {
+    const el = stripRef.current;
+    const active = el?.querySelector<HTMLElement>(`[data-tab="${tab}"]`);
+    if (!el || !active) return;
+    const left = active.offsetLeft - el.offsetLeft;
+    if (left < el.scrollLeft || left + active.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({ left: Math.max(0, left - 24), behavior: "smooth" });
+    }
+  }, [tab]);
+
+  const scrollMore = () => stripRef.current?.scrollBy({ left: stripRef.current.clientWidth * 0.7, behavior: "smooth" });
+
+  return (
+    <div className="relative">
+      <div ref={stripRef} onScroll={measure} className="-mx-1 flex gap-1 overflow-x-auto border-b border-slate-200 px-1" role="tablist" aria-label="Website sections">
+        {TABS.map(([k, label]) => (
+          <button key={k} type="button" role="tab" data-tab={k} aria-selected={tab === k} onClick={() => onPick(k)}
+            className={`shrink-0 whitespace-nowrap rounded-t-md border-b-2 px-4 py-2.5 text-sm font-medium transition ${focusRing} ${tab === k ? "border-brand-600 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}>
+            {label}
+          </button>
+        ))}
+        {more && <span aria-hidden className="w-16 shrink-0" />}
+      </div>
+      {more && (
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center bg-gradient-to-l from-slate-50 via-slate-50/90 to-transparent pl-10">
+          <button type="button" tabIndex={-1} aria-hidden onClick={scrollMore}
+            className="pointer-events-auto rounded-md px-2 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50">
+            More →
+          </button>
+        </div>
       )}
     </div>
   );

@@ -12,7 +12,12 @@ class Tenant extends Model
 
     protected function casts(): array
     {
-        return ['trial_ends_at' => 'datetime', 'current_period_end' => 'datetime'];
+        return [
+            'trial_ends_at' => 'datetime',
+            'current_period_end' => 'datetime',
+            'plan_requested_at' => 'datetime',
+            'requested_plan_id' => 'integer',
+        ];
     }
 
     public function plan(): BelongsTo

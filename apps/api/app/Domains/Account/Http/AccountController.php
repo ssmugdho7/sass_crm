@@ -6,6 +6,7 @@ use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AccountController
 {
@@ -43,7 +44,13 @@ class AccountController
         }
         $user->name = $data['name'];
         $user->phone = $data['phone'] ?? null;
+        $passwordChanged = $user->isDirty('password');
         $user->save();
+        if ($passwordChanged) {
+            // Sign out every other session; keep the one making this request.
+            $current = $user->currentAccessToken();
+            $user->tokens()->when($current instanceof PersonalAccessToken, fn ($q) => $q->whereKeyNot($current->getKey()))->delete();
+        }
 
         return $user->only(['id', 'name', 'email', 'phone']);
     }

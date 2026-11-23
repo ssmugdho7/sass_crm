@@ -4,9 +4,11 @@ namespace App\Domains\Account\Http;
 
 use App\Domains\Account\Support\TeamGuard;
 use App\Models\Role;
+use App\Models\Tenant;
 use App\Models\User;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -34,8 +36,7 @@ class TeamController
             'role_id' => ['required', 'integer', Rule::exists('roles', 'id')->where('tenant_id', CurrentTenant::id())],
         ]);
         TeamGuard::ensureCanAssignRole($request->user(), $this->findRole($data['role_id']));
-        $this->ensureSeatAvailable();
-        $user = User::create($data + ['tenant_id' => CurrentTenant::id(), 'status' => 'active']);
+        $user = $this->withSeat(fn () => User::create($data + ['tenant_id' => CurrentTenant::id(), 'status' => 'active']));
 
         return response()->json($this->present($user->load('role:id,name,slug')), 201);
     }
@@ -54,6 +55,15 @@ class TeamController
         ]);
         if (empty($data['password'])) {
             unset($data['password']);
+        }
+        if ($model->id === $actor->id) {
+            // Own credentials change only through the profile endpoint, which demands the current password.
+            $emailChanged = isset($data['email']) && strcasecmp($data['email'], $model->email) !== 0;
+            if (isset($data['password']) || $emailChanged) {
+                throw ValidationException::withMessages([
+                    isset($data['password']) ? 'password' : 'email' => 'Use your profile settings to change your own email or password.',
+                ]);
+            }
         }
         $roleChanged = isset($data['role_id']) && (int) $data['role_id'] !== $model->role_id;
         if ($roleChanged) {
@@ -90,8 +100,7 @@ class TeamController
         $model = $this->find($user);
         TeamGuard::ensureCanManageUser($request->user(), $model);
         if ($model->status !== 'active') {
-            $this->ensureSeatAvailable();
-            $model->update(['status' => 'active']);
+            $this->withSeat(fn () => $model->update(['status' => 'active']));
         }
 
         return $this->present($model->load('role:id,name,slug'));
@@ -129,12 +138,21 @@ class TeamController
         return User::where('tenant_id', CurrentTenant::id())->where('status', 'active')->count();
     }
 
-    private function ensureSeatAvailable(): void
+    /**
+     * Run $activate (create/enable a user) only if a seat is free. The tenant row is locked so
+     * concurrent requests serialise and cannot both take the last seat.
+     */
+    private function withSeat(callable $activate): mixed
     {
-        $max = CurrentTenant::get()->plan?->max_users;
-        if ($max !== null && $this->activeCount() >= $max) {
-            throw ValidationException::withMessages(['email' => "Your plan allows {$max} active users. Upgrade your plan to add more."]);
-        }
+        return DB::transaction(function () use ($activate) {
+            $tenant = Tenant::whereKey(CurrentTenant::id())->lockForUpdate()->firstOrFail();
+            $max = $tenant->plan?->max_users;
+            if ($max !== null && $this->activeCount() >= $max) {
+                throw ValidationException::withMessages(['email' => "Your plan allows {$max} active users. Upgrade your plan to add more."]);
+            }
+
+            return $activate();
+        });
     }
 
     private function ownerRoleIds(): array

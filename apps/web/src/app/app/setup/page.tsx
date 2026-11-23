@@ -166,19 +166,41 @@ function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promi
   );
 }
 
+type SiteStatus = { published: boolean };
+type Checklist = { percent: number; done: number; total: number };
+
 function WebsiteStep({ slug, onBack }: { slug: string; onBack: () => void }) {
+  const { data: site, error } = useFetch<SiteStatus>("/app/website/settings");
+  const { data: checklist } = useFetch<Checklist>("/app/website/checklist");
+  const live = site?.published === true;
+
   return (
     <div className="space-y-5 text-center">
-      <div className="text-4xl">🏗️</div>
+      <div className="text-4xl" aria-hidden>🏗️</div>
       <div>
         <h2 className="text-lg font-semibold text-slate-900">You&apos;re all set!</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Your company website is live at <Link href={`/site/${slug}`} className="font-mono text-brand-700 hover:underline">/site/{slug}</Link>. It grows as you add services, projects and reviews.
-        </p>
+        {!site ? (
+          error ? <p className="mt-1 text-sm text-slate-600">Your CRM is ready. Build your company website from the Website page.</p> : <p className="mt-1 text-sm text-slate-500">Checking your website…</p>
+        ) : live ? (
+          <p className="mt-1 text-sm text-slate-600">
+            Your company website is live at <Link href={`/site/${slug}`} className="font-mono text-brand-700 hover:underline">/site/{slug}</Link>. It grows as you add services, projects and reviews.
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-slate-600">
+            Your website is a draft — add a few basics and publish it. Visitors can&apos;t see it until you do.
+            {checklist && <span className="mt-1 block text-slate-500">{checklist.done} of {checklist.total} setup steps done.</span>}
+          </p>
+        )}
       </div>
+      {site && !live && (
+        <div className="flex flex-wrap justify-center gap-3">
+          <Link href="/app/website" className="inline-flex rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Build my website</Link>
+          <Link href="/app/website/preview" className="inline-flex rounded-lg bg-white px-5 py-2.5 text-sm font-medium text-slate-800 ring-1 ring-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2">Preview</Link>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <Link href="/app/website" className="rounded-lg border border-brand-500 bg-brand-50 p-4 text-left hover:bg-brand-100">
-          <p className="font-medium text-brand-800">Set up your website →</p>
+          <p className="font-medium text-brand-800">{live ? "Update your website →" : "Set up your website →"}</p>
           <p className="mt-1 text-xs text-brand-700">Add your services, photos and contact details.</p>
         </Link>
         <Link href="/app" className="rounded-lg border border-slate-200 p-4 text-left hover:border-slate-300">

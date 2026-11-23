@@ -79,7 +79,7 @@ class AuthController
             'permissions' => $user->permissionList(),
             'tenant' => $tenant ? [
                 'id' => $tenant->id, 'name' => $tenant->name, 'slug' => $tenant->slug, 'status' => $tenant->status,
-                'trial_ends_at' => $tenant->trial_ends_at, 'plan' => $tenant->plan?->only(['id', 'name', 'slug']),
+                'accessible' => $tenant->isAccessible(), 'trial_ends_at' => $tenant->trial_ends_at, 'plan' => $tenant->plan?->only(['id', 'name', 'slug']),
                 'modules' => $tenant->enabledModuleKeys(),
             ] : null,
         ];

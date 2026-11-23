@@ -65,19 +65,60 @@ class ConcurrencyTest extends SalesTestCase
         $this->assertSame('paid', $invoice->status);
     }
 
-    public function test_unique_index_rejects_duplicate_reference_and_allows_null(): void
+    public function test_manual_reference_reused_across_invoices_credits_both(): void
+    {
+        $a = $this->invoice(50000);
+        $b = $this->invoice(50000);
+        $record = app(RecordPayment::class);
+
+        $pa = $record($a, 1000, 'check', 'CHK-1');
+        $pb = $record($b, 2000, 'check', 'CHK-1');
+        $record($a, 100, 'cash');
+        $record($a, 100, 'cash');
+
+        $this->assertNotSame($pa->id, $pb->id);
+        $this->assertSame(1200, (int) $a->fresh()->amount_paid);
+        $this->assertSame(2000, (int) $b->fresh()->amount_paid);
+        $this->assertNull($pa->external_ref);
+    }
+
+    public function test_manual_reference_via_api_credits_second_invoice(): void
+    {
+        $this->actingAsOwner();
+        $a = $this->invoice(50000);
+        $b = $this->invoice(50000);
+        foreach ([$a, $b] as $inv) {
+            $this->postJson("/api/app/invoices/{$inv->id}/payments", ['amount' => 1500, 'method' => 'check', 'reference' => 'CHK-1'])
+                ->assertCreated()->assertJsonPath('payment.invoice_id', $inv->id);
+        }
+        $this->assertSame(1500, (int) $b->fresh()->amount_paid);
+    }
+
+    public function test_unique_index_rejects_duplicate_stripe_session(): void
     {
         $invoice = $this->invoice();
-        $record = app(RecordPayment::class);
-        $record($invoice, 100, 'cash');
-        $record($invoice, 100, 'cash');
-        $record($invoice, 100, 'check', 'CHK-1');
-        $this->assertSame(3, Payment::withoutGlobalScope('tenant')->where('invoice_id', $invoice->id)->count());
+        app(RecordPayment::class)($invoice, 100, 'stripe', 'cs_x');
 
         $this->expectException(UniqueConstraintViolationException::class);
         Payment::withoutGlobalScope('tenant')->forceCreate([
-            'tenant_id' => $invoice->tenant_id, 'invoice_id' => $invoice->id, 'amount' => 1, 'method' => 'check', 'reference' => 'CHK-1', 'paid_at' => now(),
+            'tenant_id' => $invoice->tenant_id, 'invoice_id' => $invoice->id, 'amount' => 1, 'method' => 'stripe', 'reference' => 'cs_x', 'external_ref' => 'cs_x', 'paid_at' => now(),
         ]);
+    }
+
+    public function test_cap_to_balance_clamps_under_lock(): void
+    {
+        $invoice = $this->invoice(50000, 0);
+        $stale = Invoice::withoutGlobalScope('tenant')->find($invoice->id);
+        $record = app(RecordPayment::class);
+
+        $record($invoice, 45000, 'cash');
+        // Stale model still believes 50000 is owed; the cap must use the locked row.
+        $p = $record($stale, 50000, 'stripe', 'cs_cap', capToBalance: true);
+        $this->assertSame(5000, (int) $p->amount);
+        $this->assertSame(50000, (int) $invoice->fresh()->amount_paid);
+
+        $this->assertNull($record($stale, 100, 'stripe', 'cs_cap2', capToBalance: true));
+        $this->assertSame(50000, (int) $invoice->fresh()->amount_paid);
     }
 
     public function test_stale_invoice_model_does_not_lose_payments(): void

@@ -8,7 +8,6 @@ use App\Models\Plan;
 use App\Models\TenantModule;
 use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class BillingController
@@ -26,6 +25,7 @@ class BillingController
         return [
             'plan' => $tenant->plan?->only(['id', 'name', 'slug', 'price_monthly', 'price_yearly', 'max_users', 'included_modules', 'features']),
             'status' => $tenant->status,
+            'accessible' => $tenant->isAccessible(),
             'trial_ends_at' => $tenant->trial_ends_at,
             'current_period_end' => $tenant->current_period_end,
             'billing_cycle' => $tenant->billing_cycle,
@@ -34,7 +34,7 @@ class BillingController
                 ? Plan::find($tenant->requested_plan_id)?->only(['id', 'name', 'slug', 'price_monthly', 'price_yearly'])
                 : null,
             'requested_cycle' => $tenant->requested_cycle,
-            'plan_requested_at' => $tenant->plan_requested_at ? Carbon::parse($tenant->plan_requested_at)->toJSON() : null,
+            'plan_requested_at' => $tenant->plan_requested_at?->toJSON(),
             'addons' => $paidAddons,
             'addon_monthly_cost' => $paidAddons->sum('price_monthly'),
             'plans' => Plan::where('is_active', true)->orderBy('sort')

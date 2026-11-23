@@ -9,28 +9,45 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * The only way to record money against an invoice (manual entry, Stripe webhook, ...). Updates amount_paid + status.
- * Idempotent per (tenant, method, reference): recording the same non-null reference twice returns the first payment.
+ * Stripe payments are idempotent per (tenant, session id) via payments.external_ref: a repeated delivery returns the
+ * first payment. Manual references are free text and never dedupe (the same check number may pay two invoices).
  */
 class RecordPayment
 {
+    /** Methods whose reference is a provider-issued, globally unique id. */
+    public const EXTERNAL_METHODS = ['stripe'];
+
     public function __construct(private RefreshInvoiceStatus $refresh) {}
 
-    public function __invoke(Invoice $invoice, int $amount, string $method, ?string $reference = null): Payment
+    /**
+     * With $capToBalance the amount is clamped to the balance read under the row lock; returns null (records
+     * nothing) when nothing is owed or the invoice is void.
+     */
+    public function __invoke(Invoice $invoice, int $amount, string $method, ?string $reference = null, bool $capToBalance = false): ?Payment
     {
-        return DB::transaction(function () use ($invoice, $amount, $method, $reference) {
+        $externalRef = in_array($method, self::EXTERNAL_METHODS, true) && $reference !== null && $reference !== '' ? $reference : null;
+
+        return DB::transaction(function () use ($invoice, $amount, $method, $reference, $externalRef, $capToBalance) {
             // Serialises concurrent payments on this invoice; amount_paid is then updated from the locked row.
-            RefreshInvoiceStatus::lock($invoice);
-            if ($reference !== null && ($existing = $this->existing($invoice, $method, $reference))) {
+            $locked = RefreshInvoiceStatus::lock($invoice);
+            if ($externalRef !== null && ($existing = $this->existing($invoice, $externalRef))) {
                 return $existing;
+            }
+            if ($capToBalance) {
+                $amount = min($amount, (int) $locked->total - (int) $locked->amount_paid);
+                if ($amount <= 0 || $locked->status === 'void') {
+                    return null;
+                }
             }
 
             $payment = new Payment(['invoice_id' => $invoice->id, 'amount' => $amount, 'method' => $method, 'reference' => $reference, 'paid_at' => now()]);
             $payment->tenant_id = $invoice->tenant_id;
+            $payment->external_ref = $externalRef;
             try {
                 // Savepoint, so a duplicate-reference violation doesn't abort the outer transaction (Postgres).
                 DB::transaction(fn () => $payment->save());
             } catch (UniqueConstraintViolationException $e) {
-                if ($reference === null || ! ($existing = $this->existing($invoice, $method, $reference))) {
+                if ($externalRef === null || ! ($existing = $this->existing($invoice, $externalRef))) {
                     throw $e;
                 }
 
@@ -42,9 +59,9 @@ class RecordPayment
         });
     }
 
-    private function existing(Invoice $invoice, string $method, string $reference): ?Payment
+    private function existing(Invoice $invoice, string $externalRef): ?Payment
     {
         return Payment::withoutGlobalScope('tenant')->where('tenant_id', $invoice->tenant_id)
-            ->where('method', $method)->where('reference', $reference)->first();
+            ->where('external_ref', $externalRef)->first();
     }
 }

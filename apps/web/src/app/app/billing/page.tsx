@@ -11,6 +11,7 @@ type Plan = { id: number; name: string; slug: string; price_monthly: number; pri
 type Billing = {
   plan: Plan | null;
   status: string;
+  accessible: boolean;
   trial_ends_at: string | null;
   current_period_end: string | null;
   billing_cycle: Cycle;
@@ -100,6 +101,16 @@ function BillingView() {
         <div className="mb-6 rounded-xl border border-brand-200 bg-brand-50 p-5">
           <p className="text-lg font-semibold text-brand-800">{trialDays > 0 ? `${trialDays} day${trialDays === 1 ? "" : "s"} left in your free trial` : "Your free trial has ended"}</p>
           <p className="mt-1 text-sm text-brand-700">Trial ends {formatDate(data.trial_ends_at)}. Request a plan below and we&apos;ll activate it once your first invoice is paid.</p>
+        </div>
+      )}
+      {data.status === "suspended" && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5">
+          <p className="text-lg font-semibold text-red-800">Your account is suspended</p>
+          <p className="mt-1 text-sm text-red-700">
+            {data.requested_plan
+              ? "Your plan request is with the BuildCRM team. Full access returns as soon as they activate it."
+              : "Your trial or paid period has ended. Request a plan below; the BuildCRM team will invoice you and reactivate your account once it's paid. Your data is kept."}
+          </p>
         </div>
       )}
       {data.status === "past_due" && (

@@ -45,8 +45,9 @@ class StripeWebhookKey
         return Tenant::find($row->tenant_id);
     }
 
+    /** Absolute webhook URL on the API's public origin (APP_URL), never the requesting/dev frontend origin. */
     public static function url(string $key): string
     {
-        return TenantModuleConfig::frontend('/api/public/stripe/webhook/'.$key);
+        return rtrim((string) config('app.url'), '/').'/api/public/stripe/webhook/'.$key;
     }
 }

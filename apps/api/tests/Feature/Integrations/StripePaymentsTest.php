@@ -174,6 +174,7 @@ class StripePaymentsTest extends TestCase
 
         $url = $this->getJson('/api/app/integrations/stripe/webhook-url')->assertOk()->json('url');
         $this->assertMatchesRegularExpression('#/api/public/stripe/webhook/[A-Za-z0-9]{40}$#', $url);
+        $this->assertStringStartsWith(rtrim(config('app.url'), '/').'/api/public/stripe/webhook/', $url);
         $this->assertSame($url, $this->getJson('/api/app/integrations/stripe/webhook-url')->json('url'));
         $key = substr($url, strrpos($url, '/') + 1);
 
@@ -209,5 +210,29 @@ class StripePaymentsTest extends TestCase
         $member = User::create(['tenant_id' => $this->tenant->id, 'role_id' => $role->id, 'name' => 'Vi', 'email' => 'vi@demo.test', 'password' => 'password', 'status' => 'active']);
         Sanctum::actingAs($member);
         $this->getJson('/api/app/integrations/stripe/webhook-url')->assertForbidden();
+    }
+
+    public function test_checkout_refuses_draft_and_void_invoices(): void
+    {
+        $this->configure(['secret_key' => 'sk_test_123']);
+        Http::fake();
+        $draft = $this->invoice(['number' => 'INV-2001', 'status' => 'draft']);
+        $void = $this->invoice(['number' => 'INV-2002', 'status' => 'void']);
+
+        $this->postJson("/api/public/invoices/{$draft->public_token}/checkout")->assertStatus(422);
+        $this->postJson("/api/public/invoices/{$void->public_token}/checkout")->assertStatus(422);
+        Http::assertNothingSent();
+    }
+
+    public function test_webhook_skips_void_invoice(): void
+    {
+        $this->configure(['secret_key' => 'sk_test_123', 'webhook_secret' => 'whsec_abc']);
+        $invoice = $this->invoice(['status' => 'void']);
+        $payload = $this->paidEvent($invoice, 'cs_void');
+        $headers = $this->transformHeadersToServerVars(['Stripe-Signature' => StripeSignature::header($payload, 'whsec_abc')]);
+
+        $this->call('POST', '/api/public/stripe/webhook/demo-builders', [], [], [], $headers, $payload)->assertOk();
+        $this->assertSame(0, Payment::withoutGlobalScope('tenant')->where('reference', 'cs_void')->count());
+        $this->assertSame(10000, (int) $invoice->refresh()->amount_paid);
     }
 }

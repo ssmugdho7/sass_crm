@@ -75,7 +75,7 @@ export default function Home() {
                   Sign in
                 </Link>
               </div>
-              <p className="mt-4 text-sm text-slate-400">No credit card required · Set up in 5 minutes</p>
+              <p className="mt-4 text-sm text-slate-300">No credit card required · Set up in 5 minutes</p>
             </div>
 
             {/* Product mock */}
@@ -181,7 +181,7 @@ export default function Home() {
             <div className="mx-auto max-w-2xl text-center">
               <p className="text-sm font-semibold uppercase tracking-wider text-brand-500">Add-on marketplace</p>
               <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Install more power in one click</h2>
-              <p className="mt-4 text-slate-400">Start lean and add capabilities as you grow. Higher plans include popular add-ons for free.</p>
+              <p className="mt-4 text-slate-300">Start lean and add capabilities as you grow. Higher plans include popular add-ons for free.</p>
             </div>
             <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {addons.map((a) => (
@@ -189,7 +189,7 @@ export default function Home() {
                   <Check />
                   <div>
                     <h3 className="font-semibold">{a.name}</h3>
-                    <p className="mt-1 text-sm text-slate-400">{a.text}</p>
+                    <p className="mt-1 text-sm text-slate-300">{a.text}</p>
                   </div>
                 </li>
               ))}

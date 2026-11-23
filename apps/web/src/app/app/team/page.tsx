@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, can, crm, formatDate } from "@/lib/api";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, cx, fieldError } from "@/components/ui";
+import { Badge, Button, Card, ErrorText, Field, Input, Link, Modal, PageHeader, Select, Spinner, Table, cx, fieldError } from "@/components/ui";
 
 type Role = { id: number; name: string; slug: string; permissions: string[]; is_system: boolean; users_count: number };
 type Member = { id: number; name: string; email: string; phone: string | null; status: string; role_id: number | null; last_login_at: string | null; role: { id: number; name: string; slug: string } | null };
@@ -101,7 +101,10 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
     try {
       const { role_id, ...rest } = form;
       // Your own role can't be changed here; omit it so the API doesn't reject the save.
-      const body = editingSelf ? { ...rest, phone: form.phone || null } : { ...rest, role_id: Number(role_id), phone: form.phone || null };
+      // Your own email/password are changed in Settings (the team API rejects them), so send name/phone only.
+      const body = editingSelf
+        ? { name: rest.name, phone: form.phone || null }
+        : { ...rest, role_id: Number(role_id), phone: form.phone || null };
       if (editing === "new") await crm("/app/team/users", { body });
       else if (editing) await crm(`/app/team/users/${editing.id}`, { method: "PUT", body });
       setEditing(null);
@@ -125,6 +128,28 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
     }
   };
 
+  const actions = (m: Member) =>
+    canManage(m) && (
+      <div className="flex flex-wrap justify-end gap-1">
+        <Button variant="ghost" className="px-2 py-1" onClick={() => open(m)}>Edit</Button>
+        {m.id !== meId && (
+          <>
+            <Button variant="ghost" className="px-2 py-1" onClick={() => act(m, m.status === "active" ? "disable" : "enable")}>
+              {m.status === "active" ? "Disable" : "Enable"}
+            </Button>
+            <Button variant="danger-ghost" className="px-2 py-1" onClick={() => act(m, "delete")}>Delete</Button>
+          </>
+        )}
+      </div>
+    );
+  const lastLogin = (m: Member) => (m.last_login_at ? formatDate(m.last_login_at) : "Never");
+  const nameCell = (m: Member) => (
+    <div className="min-w-0">
+      <p className="truncate font-medium text-slate-900">{m.name}{m.id === meId && <span className="ml-1 text-xs font-normal text-slate-500">(you)</span>}</p>
+      <p className="truncate text-xs text-slate-500">{m.email}</p>
+    </div>
+  );
+
   return (
     <Card
       title={`Team members${users.max_users !== null ? ` · ${users.active_users} of ${users.max_users} seats used` : ""}`}
@@ -136,34 +161,40 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
         </p>
       )}
       <ErrorText error={rowErr} />
-      <Table
-        rows={users.data}
-        columns={[
-          ["Name", (m) => (<div><p className="font-medium text-slate-900">{m.name}{m.id === meId && <span className="ml-1 text-xs text-slate-500">(you)</span>}</p><p className="text-xs text-slate-500">{m.email}</p></div>)],
-          ["Role", (m) => m.role?.name ?? "—"],
-          ["Status", (m) => <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
-          ["Last login", (m) => (m.last_login_at ? formatDate(m.last_login_at) : "Never")],
-          ["", (m) =>
-            canManage(m) && (
-              <div className="flex justify-end gap-1">
-                <Button variant="ghost" className="px-2 py-1" onClick={() => open(m)}>Edit</Button>
-                {m.id !== meId && (
-                  <>
-                    <Button variant="ghost" className="px-2 py-1" onClick={() => act(m, m.status === "active" ? "disable" : "enable")}>
-                      {m.status === "active" ? "Disable" : "Enable"}
-                    </Button>
-                    <Button variant="danger-ghost" className="px-2 py-1" onClick={() => act(m, "delete")}>Delete</Button>
-                  </>
-                )}
-              </div>
-            )],
-        ]}
-      />
+      {/* Stacked cards on phones; the table needs more width than a 390px screen has. */}
+      <ul className="divide-y divide-slate-100 sm:hidden">
+        {users.data.map((m) => (
+          <li key={m.id} className="min-w-0 space-y-2 py-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              {nameCell(m)}
+              <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>
+            </div>
+            <p className="text-xs text-slate-600">
+              {m.role?.name ?? "No role"} · <span className="whitespace-nowrap">Last login {lastLogin(m)}</span>
+            </p>
+            {actions(m)}
+          </li>
+        ))}
+      </ul>
+      <div className="hidden sm:block">
+        <Table
+          rows={users.data}
+          columns={[
+            ["Name", nameCell],
+            ["Role", (m) => m.role?.name ?? "—"],
+            ["Status", (m) => <Badge tone={m.status === "active" ? "green" : "gray"}>{m.status}</Badge>],
+            ["Last login", (m) => <span className="whitespace-nowrap">{lastLogin(m)}</span>],
+            ["", actions],
+          ]}
+        />
+      </div>
       <Modal open={editing !== null} title={editing === "new" ? "Add team member" : "Edit team member"} onClose={() => setEditing(null)}>
         <form onSubmit={save} className="space-y-3">
           <ErrorText error={err instanceof ApiError && Object.keys(err.errors).length ? null : err} />
           <Field label="Name" error={fieldError(err, "name")}><Input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Email" error={fieldError(err, "email")}><Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          {!editingSelf && (
+            <Field label="Email" error={fieldError(err, "email")}><Input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+          )}
           <Field label="Phone" error={fieldError(err, "phone")}><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
           <Field label={editingSelf ? "Role (you can't change your own role)" : "Role"} error={fieldError(err, "role_id")}>
             <Select required disabled={editingSelf} value={form.role_id} onChange={(e) => setForm({ ...form, role_id: e.target.value })}>
@@ -173,9 +204,15 @@ function UsersTab({ users, roles, manage, meId, myPerms, onChange }: { users: Us
                 .map((r) => <option key={r.id} value={r.id} disabled={!assignable.includes(r)}>{r.name}</option>)}
             </Select>
           </Field>
-          <Field label={editing === "new" ? "Password" : "New password (leave blank to keep)"} error={fieldError(err, "password")}>
-            <Input type="password" minLength={8} required={editing === "new"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          </Field>
+          {editingSelf ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              <Link href="/app/settings" className="font-medium text-brand-700 hover:underline">Change your email or password in Settings</Link>
+            </p>
+          ) : (
+            <Field label={editing === "new" ? "Password" : "New password (leave blank to keep)"} error={fieldError(err, "password")}>
+              <Input type="password" autoComplete="new-password" minLength={8} required={editing === "new"} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </Field>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
             <Button disabled={busy}>{busy ? "Saving…" : "Save"}</Button>

@@ -66,7 +66,8 @@ class PublicDocumentController extends Controller
     {
         abort_if(strlen($token) < 20, 404);
         $doc = $model::withoutGlobalScope('tenant')->where('public_token', $token)->first();
-        abort_if(! $doc, 404, 'Document not found.');
+        // Drafts are unpublished: they look exactly like an unknown token.
+        abort_if(! $doc || $doc->status === 'draft', 404, 'Document not found.');
         abort_unless($this->tenant($doc)->isAccessible(), 404, 'Document not found.');
         $doc->setRelation('project', $doc->project()->withoutGlobalScope('tenant')->where('tenant_id', $doc->tenant_id)->first());
 

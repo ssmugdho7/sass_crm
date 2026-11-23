@@ -5,8 +5,8 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ApiError, can, crm } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useFetch } from "@/lib/useFetch";
-import { Badge, Button, Card, ErrorText, Field, Input, Link, PageHeader, Spinner, fieldError } from "@/components/ui";
-import { type Addon, fieldLabel } from "../_types";
+import { Badge, Button, Card, ErrorText, Field, Input, Link, PageHeader, Select, Spinner, fieldError } from "@/components/ui";
+import { type Addon, type AddonField, fieldHelp, fieldLabel } from "../_types";
 
 export default function AddonConfigPage() {
   const { key } = useParams<{ key: string }>();
@@ -19,7 +19,12 @@ export default function AddonConfigPage() {
 
   const apply = (a: Addon) => {
     setAddon(a);
-    setValues(Object.fromEntries(a.fields.map((f) => [f.key, "value" in f ? f.value ?? "" : ""])));
+    setValues(Object.fromEntries(a.fields.map((f) => {
+      const v = "value" in f ? f.value ?? "" : "";
+      // Selects (e.g. currency) need a value matching an option; default to the first one.
+      const options = fieldHelp(a.key, f.key).options;
+      return [f.key, options ? options.find((o) => o.toLowerCase() === v.toLowerCase()) ?? options[0] : v];
+    })));
   };
 
   useEffect(() => {
@@ -60,7 +65,16 @@ export default function AddonConfigPage() {
   return (
     <div className="max-w-2xl">
       <BackLink />
-      <PageHeader title={addon.name} subtitle={addon.description} actions={addon.installed ? <Badge tone="green">Installed</Badge> : <Badge>Not installed</Badge>} />
+      <PageHeader
+        title={addon.name}
+        subtitle={addon.description}
+        actions={
+          <>
+            {addon.installed ? <Badge tone="green">Installed</Badge> : <Badge>Not installed</Badge>}
+            {key === "payment_gateway" && !locked && (stripeReady(addon) ? <Badge tone="green">Ready to accept payments</Badge> : <Badge tone="amber">Not configured</Badge>)}
+          </>
+        }
+      />
       {!addon.installed && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
           <span>This add-on isn&apos;t installed yet. You can save settings now and install it when ready.</span>
@@ -82,17 +96,10 @@ export default function AddonConfigPage() {
         <form onSubmit={save} className="space-y-4">
           <ErrorText error={error instanceof ApiError && Object.keys(error.errors).length ? null : error} />
           {saved && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Settings saved.</p>}
-          {addon.fields.map((f) =>
-            f.type === "secret" && "set" in f ? (
-              <Field key={f.key} label={fieldLabel(f.key)} error={fieldError(error, f.key)}>
-                <Input type="password" autoComplete="new-password" value={values[f.key] ?? ""} placeholder={f.set ? `Saved (${f.hint}) — leave blank to keep` : "Not set"} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
-              </Field>
-            ) : (
-              <Field key={f.key} label={fieldLabel(f.key)} error={fieldError(error, f.key)}>
-                <Input value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
-              </Field>
-            ),
-          )}
+          {addon.fields.map((f) => (
+            <SettingField key={f.key} addonKey={addon.key} field={f} value={values[f.key] ?? ""} error={fieldError(error, f.key)}
+              onChange={(v) => setValues({ ...values, [f.key]: v })} />
+          ))}
           <div className="flex justify-end">
             <Button disabled={busy}>{busy ? "Saving…" : "Save settings"}</Button>
           </div>
@@ -100,6 +107,31 @@ export default function AddonConfigPage() {
         )}
       </Card>
     </div>
+  );
+}
+
+/** Stripe can take payments once both server-side secrets are saved. */
+const stripeReady = (a: Addon) => ["secret_key", "webhook_secret"].every((k) => a.fields.some((f) => f.key === k && "set" in f && f.set));
+
+function SettingField({ addonKey, field, value, error, onChange }: { addonKey: string; field: AddonField; value: string; error?: string; onChange: (v: string) => void }) {
+  const { help, placeholder, options } = fieldHelp(addonKey, field.key);
+  const id = `setting-${field.key}`;
+  const secret = field.type === "secret" && "set" in field;
+  const status = secret ? (field.set ? `Saved (${field.hint ?? "••••"}). Leave blank to keep it.` : "Not set yet.") : null;
+  const describedBy = [help && `${id}-help`, status && `${id}-status`].filter(Boolean).join(" ") || undefined;
+  return (
+    <Field label={fieldLabel(field.key)} error={error}>
+      {options ? (
+        <Select id={id} value={value} aria-describedby={describedBy} onChange={(e) => onChange(e.target.value)}>
+          {options.map((o) => <option key={o} value={o}>{o}</option>)}
+        </Select>
+      ) : (
+        <Input id={id} type={secret ? "password" : "text"} autoComplete={secret ? "new-password" : "off"} spellCheck={false}
+          value={value} placeholder={placeholder} aria-describedby={describedBy} onChange={(e) => onChange(e.target.value)} />
+      )}
+      {help && <span id={`${id}-help`} className="block text-xs text-slate-500">{help}</span>}
+      {status && <span id={`${id}-status`} className={`block text-xs ${secret && field.set ? "text-emerald-700" : "text-amber-700"}`}>{status}</span>}
+    </Field>
   );
 }
 

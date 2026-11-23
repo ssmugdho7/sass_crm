@@ -67,13 +67,13 @@ function AddonsList() {
                 {a.installed && <Badge tone="green">Installed</Badge>}
               </div>
               <p className="mt-2 flex-1 text-sm text-slate-600">{a.description}</p>
-              <p className="mt-4 text-sm font-semibold text-slate-900">
-                {a.included_in_plan ? <span className="text-emerald-700">Included in plan</span> : <>{money(a.price_monthly)}<span className="font-normal text-slate-500">/mo</span></>}
-              </p>
-              <div className="mt-4 flex items-center gap-2">
-                {a.installed && a.included_in_plan ? (
-                  <span className="text-sm text-slate-500">Included in your plan</span>
-                ) : a.key === "payment_gateway" && !canPayments ? (
+              {!a.included_in_plan && (
+                <p className="mt-4 text-sm font-semibold text-slate-900">{money(a.price_monthly)}<span className="font-normal text-slate-500">/mo</span></p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+                {a.included_in_plan && <span className="text-sm font-medium text-emerald-700">Included in your plan</span>}
+                {a.included_in_plan && a.installed && a.configurable && (a.key !== "payment_gateway" || canPayments) && <span aria-hidden className="text-sm text-slate-500">·</span>}
+                {a.installed && a.included_in_plan ? null : a.key === "payment_gateway" && !canPayments ? (
                   <span className="text-sm text-slate-500">Needs the payments permission</span>
                 ) : (
                   <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>

@@ -12,7 +12,6 @@ use App\Models\Tenant;
 use App\Models\TenantModule;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -105,14 +104,15 @@ class TenantController
     /** Approve the tenant's pending plan request: apply it, activate, start a new billing period. */
     public function approvePlanRequest(Tenant $tenant, ApplyPlan $applyPlan)
     {
-        abort_if($tenant->requested_plan_id === null, 422, 'This account has no pending plan request.');
-        $plan = Plan::find($tenant->requested_plan_id);
-        abort_if($plan === null, 422, 'The requested plan no longer exists.');
-        $cycle = $tenant->requested_cycle === 'yearly' ? 'yearly' : 'monthly';
+        DB::transaction(function () use ($tenant, $applyPlan) {
+            // Re-read the request under a row lock: a concurrent approve/reject must not apply it twice.
+            $locked = $this->lockPendingRequest($tenant);
+            $plan = Plan::find($locked->requested_plan_id);
+            abort_if($plan === null, 422, 'The requested plan no longer exists.');
+            $cycle = $locked->requested_cycle === 'yearly' ? 'yearly' : 'monthly';
 
-        DB::transaction(function () use ($tenant, $plan, $cycle, $applyPlan) {
-            $applyPlan($tenant, $plan, $cycle);
-            $tenant->refresh()->update([
+            $applyPlan($locked, $plan, $cycle);
+            $locked->refresh()->update([
                 'status' => 'active',
                 'current_period_end' => $cycle === 'yearly' ? now()->addYear() : now()->addMonth(),
             ]);
@@ -123,10 +123,20 @@ class TenantController
 
     public function rejectPlanRequest(Tenant $tenant)
     {
-        abort_if($tenant->requested_plan_id === null, 422, 'This account has no pending plan request.');
-        $tenant->update(['requested_plan_id' => null, 'requested_cycle' => null, 'plan_requested_at' => null]);
+        DB::transaction(function () use ($tenant) {
+            $this->lockPendingRequest($tenant)
+                ->update(['requested_plan_id' => null, 'requested_cycle' => null, 'plan_requested_at' => null]);
+        });
 
         return $this->show($tenant->fresh());
+    }
+
+    private function lockPendingRequest(Tenant $tenant): Tenant
+    {
+        $locked = Tenant::whereKey($tenant->id)->lockForUpdate()->firstOrFail();
+        abort_if($locked->requested_plan_id === null, 422, 'This account has no pending plan request.');
+
+        return $locked;
     }
 
     /** Tenant JSON plus the pending plan request (requested_plan, requested_cycle, plan_requested_at). */
@@ -134,7 +144,7 @@ class TenantController
     {
         $data = $tenant->toArray();
         $data['requested_plan'] = $requested?->only(['id', 'name', 'slug', 'price_monthly', 'price_yearly']);
-        $data['plan_requested_at'] = $tenant->plan_requested_at ? Carbon::parse($tenant->plan_requested_at)->toJSON() : null;
+        $data['plan_requested_at'] = $tenant->plan_requested_at?->toJSON();
 
         return $data;
     }
@@ -146,6 +156,7 @@ class TenantController
 
         $row = TenantModule::withoutGlobalScope('tenant')->firstOrNew(['tenant_id' => $tenant->id, 'module_key' => $key]);
         $row->status = $data['enabled'] ? 'active' : 'disabled';
+        $row->source ??= 'addon';
         $row->save();
 
         return ['module_key' => $key, 'status' => $row->status];

@@ -75,7 +75,7 @@ function TrialBanner() {
       <span>
         You&apos;re on a free trial — <strong>{days} {days === 1 ? "day" : "days"} left</strong> (ends {formatDate(t.trial_ends_at)}).
       </span>
-      {can(me, "team.manage") && <Link href="/app/billing" className="font-medium underline">Choose a plan</Link>}
+      {can(me, "account.manage") && <Link href="/app/billing" className="font-medium underline">Choose a plan</Link>}
     </div>
   );
 }
