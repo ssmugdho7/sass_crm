@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { ApiError, can, crm } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { useFetch } from "@/lib/useFetch";
 import { Badge, Button, Card, ErrorText, Field, Input, Link, PageHeader, Spinner, fieldError } from "@/components/ui";
 import { type Addon, fieldLabel } from "../_types";
 
@@ -67,7 +68,7 @@ export default function AddonConfigPage() {
         </div>
       )}
 
-      {key === "payment_gateway" && !locked && me?.tenant && <StripeWebhook slug={me.tenant.slug} />}
+      {key === "payment_gateway" && !locked && addon.installed && <StripeWebhook />}
       {key === "google_calendar" && addon.installed && (
         <Suspense fallback={null}>
           <GoogleConnect />
@@ -104,16 +105,17 @@ export default function AddonConfigPage() {
 
 const BackLink = () => <Link href="/app/addons" className="mb-3 inline-block text-sm text-slate-500 hover:text-slate-800">← All add-ons</Link>;
 
-function StripeWebhook({ slug }: { slug: string }) {
+function StripeWebhook() {
   const [copied, setCopied] = useState(false);
-  // Rendered only after the client-side add-on fetch, so window is always available here.
-  const url = `${typeof window === "undefined" ? "" : window.location.origin}/api/public/stripe/webhook/${slug}`;
+  const { data, error } = useFetch<{ url: string }>("/app/integrations/stripe/webhook-url");
+  const url = data?.url ?? "";
   return (
     <Card title="Stripe webhook" className="mb-4">
-      <p className="text-sm text-slate-600">In your Stripe dashboard, add a webhook endpoint with this URL, then paste its signing secret into <em>Webhook Secret</em> below.</p>
+      <p className="text-sm text-slate-600">In your Stripe dashboard, add a webhook endpoint with this URL (event <code>checkout.session.completed</code>), then paste its signing secret into <em>Webhook Secret</em> below. Keep this URL private.</p>
+      <ErrorText error={error} />
       <div className="mt-3 flex gap-2">
-        <Input readOnly value={url} onFocus={(e) => e.target.select()} className="font-mono text-xs" />
-        <Button type="button" variant="secondary" onClick={() => navigator.clipboard?.writeText(url).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</Button>
+        <Input readOnly value={url || "Loading…"} onFocus={(e) => e.target.select()} className="font-mono text-xs" />
+        <Button type="button" variant="secondary" disabled={!url} onClick={() => navigator.clipboard?.writeText(url).then(() => setCopied(true))}>{copied ? "Copied" : "Copy"}</Button>
       </div>
     </Card>
   );

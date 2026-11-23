@@ -101,8 +101,8 @@ class CrmTest extends TestCase
             ->assertJsonPath('customer.email', 's@example.com')->assertJsonPath('customer.address', '12 Oak St')
             ->assertJsonPath('project.name', 'Kitchen remodel – 12 Oak St')->assertJsonPath('project.budget', 480000)
             ->assertJsonPath('lead.status', 'won');
-        $this->assertSame($res->json('customer.id'), Lead::find($lead['id'])->customer_id);
-        $this->assertSame($res->json('customer.id'), Project::find($res->json('project.id'))->customer_id);
+        $this->assertSame($res->json('customer.id'), Lead::withoutGlobalScope('tenant')->find($lead['id'])->customer_id);
+        $this->assertSame($res->json('customer.id'), Project::withoutGlobalScope('tenant')->find($res->json('project.id'))->customer_id);
 
         $this->postJson("/api/app/leads/{$lead['id']}/convert")->assertStatus(422);
 
@@ -143,8 +143,8 @@ class CrmTest extends TestCase
 
         $this->deleteJson("/api/app/customers/{$withInvoice}")->assertStatus(422)->assertJsonPath('message', fn ($m) => str_contains($m, 'estimates or invoices'));
         $this->deleteJson("/api/app/customers/{$withEstimate}")->assertStatus(422);
-        $this->assertSame(1, Invoice::where('customer_id', $withInvoice)->count());
-        $this->assertNotNull(Customer::find($withEstimate));
+        $this->assertSame(1, Invoice::withoutGlobalScope('tenant')->where('customer_id', $withInvoice)->count());
+        $this->assertNotNull(Customer::withoutGlobalScope('tenant')->find($withEstimate));
         $this->deleteJson("/api/app/customers/{$clean}")->assertNoContent();
     }
 
@@ -170,7 +170,7 @@ class CrmTest extends TestCase
             $this->deleteJson("/api/app/projects/{$withExpense}")->assertStatus(422);
         }
 
-        $this->assertNotNull(Project::find($invoiced));
+        $this->assertNotNull(Project::withoutGlobalScope('tenant')->find($invoiced));
         $this->deleteJson("/api/app/projects/{$clean}")->assertNoContent();
     }
 

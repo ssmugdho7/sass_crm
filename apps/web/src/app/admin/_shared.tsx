@@ -15,6 +15,8 @@ export type Tenant = {
   id: number; name: string; slug: string; email: string | null; phone: string | null; plan_id: number | null; plan: PlanRef | null;
   status: string; billing_cycle: string; trial_ends_at: string | null; current_period_end: string | null; created_at: string;
   users_count?: number; owner?: { id: number; name: string; email: string } | null;
+  requested_plan?: { id: number; name: string; slug: string; price_monthly: number; price_yearly: number } | null;
+  requested_cycle?: string | null; plan_requested_at?: string | null;
 };
 export type Role = { id: number; tenant_id: number; name: string; slug: string; permissions: string[]; is_system: boolean; users_count?: number };
 export type AdminUser = {
@@ -27,6 +29,8 @@ export const TENANT_STATUSES = ["trial", "active", "past_due", "suspended", "can
 export const statusTone = (s: string) =>
   ({ active: "green", trial: "blue", past_due: "amber", suspended: "red", cancelled: "gray", disabled: "red" })[s] ?? "gray";
 export const StatusBadge = ({ status }: { status: string }) => <Badge tone={statusTone(status)}>{status}</Badge>;
+export const PlanRequestBadge = ({ tenant }: { tenant: Tenant }) =>
+  tenant.requested_plan ? <Badge tone="amber">Plan requested: {tenant.requested_plan.name}</Badge> : null;
 export function Pager({ page, last, total, onPage }: { page: number; last: number; total: number; onPage: (p: number) => void }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm text-slate-500">

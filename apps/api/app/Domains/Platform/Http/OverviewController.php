@@ -22,6 +22,7 @@ class OverviewController
                 'by_status' => collect(['trial', 'active', 'past_due', 'suspended', 'cancelled'])
                     ->mapWithKeys(fn ($s) => [$s => (int) ($byStatus[$s] ?? 0)]),
             ],
+            'pending_plan_requests' => Tenant::query()->whereNotNull('requested_plan_id')->count(),
             'users' => User::query()->where('is_super_admin', false)->count(),
             'mrr' => $mrr,
             'signups_30d' => Tenant::query()->where('created_at', '>=', now()->subDays(30))->count(),

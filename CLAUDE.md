@@ -16,7 +16,7 @@ Subscription SaaS modeled on ShopLagbe (`/Volumes/mySSD/projects/ecommerce`): ma
 - Domain modules live in `app/Domains/{Name}/` with their own `routes.php` (auto-loaded by `routes/api.php` under `/api`), `Http/` controllers, `Actions/`, `Models/` for domain-only models.
 - Domain migrations go in `app/Domains/{Name}/Database/Migrations/` (auto-loaded). Demo data: `app/Domains/{Name}/Database/DemoSeeder.php` (idempotent, scoped to tenant slug `demo-builders`); the architect wires it into DatabaseSeeder.
 - Shared models in `app/Models`: Tenant, User, Role, Plan, Module, TenantModule, Customer, Lead, Project, Task, Estimate, Invoice, Payment. Do not change shared migrations; add new migrations for new tables/columns.
-- Multi-tenancy: every tenant-owned table has `tenant_id`; its model uses `App\Support\Tenancy\BelongsToTenant` (global scope `tenant` + auto-stamp). Never bypass the scope in tenant routes. Platform/super-admin and public code use `withoutGlobalScope('tenant')` explicitly and filter by tenant themselves.
+- Multi-tenancy: every tenant-owned table has `tenant_id`; its model uses `App\Support\Tenancy\BelongsToTenant` (global scope `tenant` + auto-stamp). The scope FAILS CLOSED: with no current tenant it matches no rows. Never bypass the scope in tenant routes. Platform/super-admin and public code use `withoutGlobalScope('tenant')` explicitly and filter by tenant themselves.
 - Route groups:
   - Tenant CRM: `Route::middleware(['auth:sanctum', 'tenant'])->prefix('app')`, plus `module:{key}` (tenant has module) and `perm:{x.y}` (user permission). Permissions are listed per module in `config/crm_modules.php`; `*.view` for reads, `*.manage` for writes.
   - Super admin: `Route::middleware(['auth:sanctum', 'super'])->prefix('platform')`.

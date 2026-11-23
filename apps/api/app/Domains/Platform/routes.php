@@ -15,6 +15,8 @@ Route::middleware(['auth:sanctum', 'super'])->prefix('platform')->group(function
     Route::get('tenants/{tenant}', [TenantController::class, 'show']);
     Route::put('tenants/{tenant}', [TenantController::class, 'update']);
     Route::delete('tenants/{tenant}', [TenantController::class, 'destroy']);
+    Route::post('tenants/{tenant}/plan-request/approve', [TenantController::class, 'approvePlanRequest']);
+    Route::post('tenants/{tenant}/plan-request/reject', [TenantController::class, 'rejectPlanRequest']);
     Route::put('tenants/{tenant}/modules/{key}', [TenantController::class, 'toggleModule']);
 
     Route::get('permissions', [RoleController::class, 'catalog']);

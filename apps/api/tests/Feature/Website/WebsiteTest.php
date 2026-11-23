@@ -63,6 +63,23 @@ class WebsiteTest extends TestCase
         $this->putJson('/api/app/website/settings', ['theme_color' => 'red'])->assertStatus(422);
     }
 
+    public function test_url_fields_only_accept_http_and_https(): void
+    {
+        $this->actAs($this->owner());
+        $bad = ['data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==', 'javascript:alert(1)', 'ftp://example.com/x.png'];
+        foreach ($bad as $url) {
+            $this->putJson('/api/app/website/settings', ['logo_url' => $url])->assertStatus(422)->assertJsonValidationErrors('logo_url');
+            $this->putJson('/api/app/website/settings', ['hero_image_url' => $url])->assertStatus(422);
+            $this->putJson('/api/app/website/settings', ['social' => ['facebook' => $url]])->assertStatus(422);
+            $this->postJson('/api/app/website/services', ['title' => 'S', 'image_url' => $url])->assertStatus(422);
+            $this->postJson('/api/app/website/portfolio', ['title' => 'P', 'cover_url' => $url])->assertStatus(422);
+            $this->postJson('/api/app/website/portfolio', ['title' => 'P', 'images' => [$url]])->assertStatus(422);
+            $this->postJson('/api/app/website/team', ['name' => 'T', 'photo_url' => $url])->assertStatus(422);
+        }
+        $this->putJson('/api/app/website/settings', ['logo_url' => 'https://cdn.example.com/logo.png', 'hero_image_url' => 'http://example.com/h.jpg'])
+            ->assertOk()->assertJsonPath('logo_url', 'https://cdn.example.com/logo.png');
+    }
+
     public function test_public_site_is_isolated_per_tenant_and_respects_publish_toggle(): void
     {
         $this->publish($this->owner());

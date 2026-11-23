@@ -14,10 +14,11 @@ trait BelongsToTenant
 {
     public static function bootBelongsToTenant(): void
     {
+        // Fail closed: with no current tenant the scope matches nothing. Platform, public,
+        // queued and console code must opt out explicitly with withoutGlobalScope('tenant').
         static::addGlobalScope('tenant', function (Builder $query) {
-            if ($id = CurrentTenant::id()) {
-                $query->where($query->getModel()->getTable().'.tenant_id', $id);
-            }
+            $id = CurrentTenant::id();
+            $id ? $query->where($query->getModel()->getTable().'.tenant_id', $id) : $query->whereRaw('1 = 0');
         });
 
         static::creating(function ($model) {

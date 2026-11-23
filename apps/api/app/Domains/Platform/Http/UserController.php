@@ -59,6 +59,9 @@ class UserController
         } else {
             unset($data['password']);
         }
+        if (isset($data['email']) && strcasecmp($data['email'], (string) $user->email) !== 0) {
+            $revoke = true;
+        }
         if (($data['status'] ?? null) === 'disabled' && $user->status !== 'disabled') {
             $revoke = true;
         }

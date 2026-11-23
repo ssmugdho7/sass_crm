@@ -55,4 +55,16 @@ class LifecycleTest extends TestCase
         Sanctum::actingAs($owner->fresh(), ['crm']);
         $this->getJson('/api/app/dashboard')->assertOk();
     }
+
+    public function test_enforce_suspends_expired_trials_only(): void
+    {
+        $t = $this->tenant();
+        $t->update(['status' => 'trial', 'trial_ends_at' => now()->addDay()]);
+        $this->artisan('subscriptions:enforce')->assertSuccessful();
+        $this->assertSame('trial', $t->fresh()->status);
+
+        $t->update(['trial_ends_at' => now()->subMinute()]);
+        $this->artisan('subscriptions:enforce')->assertSuccessful();
+        $this->assertSame('suspended', $t->fresh()->status);
+    }
 }

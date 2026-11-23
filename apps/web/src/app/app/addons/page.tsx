@@ -71,9 +71,15 @@ function AddonsList() {
                 {a.included_in_plan ? <span className="text-emerald-700">Included in plan</span> : <>{money(a.price_monthly)}<span className="font-normal text-slate-500">/mo</span></>}
               </p>
               <div className="mt-4 flex items-center gap-2">
-                <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>
-                  {busy === a.key ? "Working…" : a.installed ? "Uninstall" : "Install"}
-                </Button>
+                {a.installed && a.included_in_plan ? (
+                  <span className="text-sm text-slate-500">Included in your plan</span>
+                ) : a.key === "payment_gateway" && !canPayments ? (
+                  <span className="text-sm text-slate-500">Needs the payments permission</span>
+                ) : (
+                  <Button variant={a.installed ? "secondary" : "primary"} disabled={busy === a.key} onClick={() => toggle(a)}>
+                    {busy === a.key ? "Working…" : a.installed ? "Uninstall" : "Install"}
+                  </Button>
+                )}
                 {a.installed && a.configurable && (a.key !== "payment_gateway" || canPayments) && (
                   <Link href={`/app/addons/${a.key}`} className="text-sm font-medium text-brand-700 hover:underline">Configure →</Link>
                 )}

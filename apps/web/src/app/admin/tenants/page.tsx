@@ -1,18 +1,24 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { formatDate } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { Card, ErrorText, Input, PageHeader, Select, Spinner, Table, statusLabel } from "@/components/ui";
-import { Pager, StatusBadge, TENANT_STATUSES, type Paginated, type Tenant } from "../_shared";
+import { Pager, PlanRequestBadge, StatusBadge, TENANT_STATUSES, type Paginated, type Tenant } from "../_shared";
 
-export default function TenantsPage() {
+export default function TenantsPageRoute() {
+  return <Suspense fallback={<Spinner />}><TenantsPage /></Suspense>;
+}
+
+function TenantsPage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const [pending, setPending] = useState(params.get("pending") === "1");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
-  const qs = new URLSearchParams({ page: String(page), ...(search ? { search } : {}), ...(status ? { status } : {}) });
+  const qs = new URLSearchParams({ page: String(page), ...(search ? { search } : {}), ...(status ? { status } : {}), ...(pending ? { pending: "1" } : {}) });
   const { data, error } = useFetch<Paginated<Tenant>>(`/platform/tenants?${qs}`, "platform");
 
   return (
@@ -25,19 +31,23 @@ export default function TenantsPage() {
             <option value="">All statuses</option>
             {TENANT_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </Select>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" className="accent-brand-600" checked={pending} onChange={(e) => { setPending(e.target.checked); setPage(1); }} />
+            Plan requested only
+          </label>
         </div>
         <ErrorText error={error} />
         {!data ? <Spinner /> : (
           <>
             <Table
               rows={data.data}
-              empty="No accounts match."
+              empty={pending ? "No pending plan requests." : "No accounts match."}
               onRow={(t) => router.push(`/admin/tenants/${t.id}`)}
               columns={[
                 ["Account", (t) => <div><p className="font-medium text-slate-900">{t.name}</p><p className="text-xs text-slate-500">/{t.slug}</p></div>],
                 ["Owner", (t) => t.owner ? <div><p>{t.owner.name}</p><p className="text-xs text-slate-500">{t.owner.email}</p></div> : "—"],
                 ["Plan", (t) => t.plan?.name ?? "—"],
-                ["Status", (t) => <StatusBadge status={t.status} />],
+                ["Status", (t) => <div className="flex flex-col items-start gap-1"><StatusBadge status={t.status} /><PlanRequestBadge tenant={t} /></div>],
                 ["Users", (t) => t.users_count ?? 0],
                 ["Trial ends", (t) => <span className="whitespace-nowrap">{formatDate(t.trial_ends_at)}</span>],
                 ["Created", (t) => <span className="whitespace-nowrap">{formatDate(t.created_at)}</span>],

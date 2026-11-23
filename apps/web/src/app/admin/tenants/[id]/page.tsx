@@ -71,6 +71,7 @@ export default function TenantDetailPage() {
         }
       />
       <ErrorText error={actionError} />
+      {t.requested_plan && <PlanRequestCard tenant={t} onDone={reload} />}
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map((x) => (
           <button key={x} onClick={() => setTab(x)}
@@ -79,7 +80,7 @@ export default function TenantDetailPage() {
           </button>
         ))}
       </div>
-      {tab === "Profile" && <ProfileTab key={t.id + t.slug + t.status} tenant={t} onSaved={reload} />}
+      {tab === "Profile" && <ProfileTab key={`${t.id}-${t.slug}-${t.status}-${t.plan_id}-${t.current_period_end}`} tenant={t} onSaved={reload} />}
       {tab === "Add-ons" && <AddonsTab tenantId={t.id} modules={data.modules} onChanged={reload} />}
       {tab === "Users" && <UsersTab users={data.users} roles={data.roles} onChanged={reload} />}
       {tab === "Roles" && <RolesTab tenantId={t.id} roles={data.roles} onChanged={reload} />}
@@ -88,6 +89,52 @@ export default function TenantDetailPage() {
 }
 
 const dateInput = (d: string | null) => (d ? d.slice(0, 10) : "");
+/** Formatted echo of a yyyy-mm-dd input so admin dates read the same as everywhere else. */
+const DateHint = ({ value }: { value: string }) =>
+  value ? <span className="mt-1 block text-xs text-slate-500">{formatDate(value)}</span> : null;
+
+function PlanRequestCard({ tenant, onDone }: { tenant: Tenant; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const req = tenant.requested_plan!;
+  const yearly = tenant.requested_cycle === "yearly";
+
+  async function act(action: "approve" | "reject") {
+    const msg = action === "approve"
+      ? `Approve ${req.name} (${yearly ? "yearly" : "monthly"}) for ${tenant.name}? This activates the account and starts a new ${yearly ? "year" : "month"} of billing. Only approve once payment is received.`
+      : `Reject the ${req.name} plan request from ${tenant.name}?`;
+    if (!confirm(msg)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await platform(`/platform/tenants/${tenant.id}/plan-request/${action}`, { method: "POST" });
+      onDone();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4" role="region" aria-label="Pending plan request">
+      <ErrorText error={error} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-amber-900">
+          <p className="font-semibold">Plan change requested: {req.name} · {yearly ? "Yearly" : "Monthly"}</p>
+          <p>
+            {yearly ? `${money(req.price_yearly)}/yr` : `${money(req.price_monthly)}/mo`} · currently {tenant.plan?.name ?? "no plan"} ({statusLabel(tenant.status)})
+            {tenant.plan_requested_at && <> · requested {formatDate(tenant.plan_requested_at)}</>}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => act("reject")}>Reject</Button>
+          <Button disabled={busy} onClick={() => act("approve")}>{busy ? "Working…" : "Approve & activate"}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }) {
   const { data: plans } = useFetch<Plan[]>("/platform/plans", "platform");
@@ -108,7 +155,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
       await platform(`/platform/tenants/${tenant.id}`, {
         method: "PUT",
         body: {
-          ...form, email: form.email || null, phone: form.phone || null, plan_id: form.plan_id ? Number(form.plan_id) : null,
+          ...form, email: form.email || null, phone: form.phone || null, plan_id: form.plan_id ? Number(form.plan_id) : undefined,
           trial_ends_at: form.trial_ends_at || null, current_period_end: form.current_period_end || null,
         },
       });
@@ -132,7 +179,7 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
           <Field label="Phone" error={fieldError(error, "phone")}><Input value={form.phone} onChange={set("phone")} /></Field>
           <Field label="Plan" error={fieldError(error, "plan_id")}>
             <Select value={form.plan_id} onChange={set("plan_id")}>
-              <option value="">— No plan —</option>
+              {!form.plan_id && <option value="">— No plan —</option>}
               {(plans ?? []).map((p) => <option key={p.id} value={p.id}>{p.name} ({money(p.price_monthly)}/mo)</option>)}
             </Select>
           </Field>
@@ -147,8 +194,8 @@ function ProfileTab({ tenant, onSaved }: { tenant: Tenant; onSaved: () => void }
               {TENANT_STATUSES.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </Select>
           </Field>
-          <Field label="Trial ends" error={fieldError(error, "trial_ends_at")}><Input type="date" value={form.trial_ends_at} onChange={set("trial_ends_at")} /></Field>
-          <Field label="Current period ends" error={fieldError(error, "current_period_end")}><Input type="date" value={form.current_period_end} onChange={set("current_period_end")} /></Field>
+          <Field label="Trial ends" error={fieldError(error, "trial_ends_at")}><Input type="date" value={form.trial_ends_at} onChange={set("trial_ends_at")} /><DateHint value={form.trial_ends_at} /></Field>
+          <Field label="Current period ends" error={fieldError(error, "current_period_end")}><Input type="date" value={form.current_period_end} onChange={set("current_period_end")} required={form.status === "active"} /><DateHint value={form.current_period_end} /></Field>
         </div>
         <div className="flex items-center justify-end gap-3">
           {saved && <span className="text-sm text-emerald-700">Saved.</span>}

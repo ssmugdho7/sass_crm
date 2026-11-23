@@ -3,11 +3,13 @@
 namespace App\Domains\Integrations\Http;
 
 use App\Domains\Integrations\Services\StripeSignature;
+use App\Domains\Integrations\Services\StripeWebhookKey;
 use App\Domains\Integrations\Services\TenantModuleConfig;
 use App\Domains\Sales\Actions\RecordPayment;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Models\Tenant;
+use App\Support\Tenancy\CurrentTenant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -59,9 +61,19 @@ class StripeController extends Controller
         return response()->json(['url' => $res->json('url')]);
     }
 
-    public function webhook(Request $request, string $tenantSlug, RecordPayment $record): JsonResponse
+    /** GET /app/integrations/stripe/webhook-url — the endpoint to paste into the Stripe dashboard. */
+    public function webhookUrl(): JsonResponse
     {
-        $tenant = Tenant::where('slug', $tenantSlug)->first();
+        return response()->json(['url' => StripeWebhookKey::url(StripeWebhookKey::ensure(CurrentTenant::get()))]);
+    }
+
+    public function webhook(Request $request, string $webhookKey, RecordPayment $record): JsonResponse
+    {
+        $tenant = StripeWebhookKey::tenant($webhookKey);
+        if (! $tenant) {
+            // Deprecated: slug-based URL from before webhook keys. Breaks if the tenant renames its slug.
+            $tenant = Tenant::where('slug', $webhookKey)->first();
+        }
         $config = $tenant ? TenantModuleConfig::for($tenant, 'payment_gateway') : null;
         $payload = $request->getContent();
         if (! $config || ! StripeSignature::verify($payload, $request->header('Stripe-Signature'), (string) ($config['webhook_secret'] ?? ''))) {

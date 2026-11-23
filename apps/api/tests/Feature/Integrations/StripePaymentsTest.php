@@ -6,11 +6,14 @@ use App\Domains\Integrations\Services\StripeSignature;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
+use App\Models\Role;
 use App\Models\Tenant;
 use App\Models\TenantModule;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class StripePaymentsTest extends TestCase
@@ -153,5 +156,58 @@ class StripePaymentsTest extends TestCase
 
         $send(['id' => 'cs_late', 'amount_total' => 5000, 'currency' => 'eur']); // nothing left to pay
         $this->assertSame(0, Payment::withoutGlobalScope('tenant')->where('reference', 'cs_late')->count());
+    }
+
+    private function paidEvent(Invoice $invoice, string $id): string
+    {
+        return json_encode(['type' => 'checkout.session.completed', 'data' => ['object' => [
+            'id' => $id, 'payment_status' => 'paid', 'amount_total' => 40000,
+            'metadata' => ['invoice_id' => (string) $invoice->id],
+        ]]]);
+    }
+
+    public function test_webhook_url_endpoint_generates_stable_key_and_keyed_route_works(): void
+    {
+        $this->configure(['secret_key' => 'sk_test_123', 'webhook_secret' => 'whsec_abc']);
+        $owner = User::where('email', 'owner@demo.test')->firstOrFail();
+        Sanctum::actingAs($owner);
+
+        $url = $this->getJson('/api/app/integrations/stripe/webhook-url')->assertOk()->json('url');
+        $this->assertMatchesRegularExpression('#/api/public/stripe/webhook/[A-Za-z0-9]{40}$#', $url);
+        $this->assertSame($url, $this->getJson('/api/app/integrations/stripe/webhook-url')->json('url'));
+        $key = substr($url, strrpos($url, '/') + 1);
+
+        $row = TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $this->tenant->id)->where('module_key', 'payment_gateway')->first();
+        $this->assertSame($key, $row->webhook_key);
+        $this->assertSame($key, $row->config['webhook_key']);
+        $this->assertSame('whsec_abc', $row->config['webhook_secret']); // existing config preserved
+
+        // Key keeps working after the tenant changes its slug.
+        $this->tenant->forceFill(['slug' => 'renamed-builders'])->save();
+        $invoice = $this->invoice();
+        $payload = $this->paidEvent($invoice, 'cs_keyed');
+        $headers = $this->transformHeadersToServerVars(['Stripe-Signature' => StripeSignature::header($payload, 'whsec_abc')]);
+        $this->call('POST', "/api/public/stripe/webhook/{$key}", [], [], [], $headers, $payload)->assertOk();
+        $this->assertSame(1, Payment::withoutGlobalScope('tenant')->where('reference', 'cs_keyed')->count());
+
+        // Unknown key is rejected; legacy slug route still resolves the (new) slug.
+        $this->call('POST', '/api/public/stripe/webhook/'.str_repeat('x', 40), [], [], [], $headers, $payload)->assertStatus(400);
+        $this->call('POST', '/api/public/stripe/webhook/renamed-builders', [], [], [], $headers, $payload)->assertOk();
+    }
+
+    public function test_webhook_url_endpoint_requires_module_and_permission(): void
+    {
+        $owner = User::where('email', 'owner@demo.test')->firstOrFail();
+        Sanctum::actingAs($owner);
+        TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $this->tenant->id)->where('module_key', 'payment_gateway')->delete();
+        $this->getJson('/api/app/integrations/stripe/webhook-url')->assertForbidden();
+
+        $this->configure([]);
+        $this->getJson('/api/app/integrations/stripe/webhook-url')->assertOk();
+
+        $role = Role::create(['tenant_id' => $this->tenant->id, 'name' => 'Viewer', 'slug' => 'viewer-'.uniqid(), 'permissions' => ['invoices.view']]);
+        $member = User::create(['tenant_id' => $this->tenant->id, 'role_id' => $role->id, 'name' => 'Vi', 'email' => 'vi@demo.test', 'password' => 'password', 'status' => 'active']);
+        Sanctum::actingAs($member);
+        $this->getJson('/api/app/integrations/stripe/webhook-url')->assertForbidden();
     }
 }

@@ -95,8 +95,7 @@ function CompanyStep({ onDone }: { onDone: () => Promise<void> }) {
         <Field label="Business email" error={fieldError(error, "email")}><Input type="email" value={form.email ?? ""} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
         <Field label="Business phone" error={fieldError(error, "phone")}><Input value={form.phone ?? ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></Field>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-        <Link href="/app" className="text-sm font-medium text-slate-500 hover:text-slate-900 hover:underline">Skip for now</Link>
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
         <Button disabled={busy}>{busy ? "Saving…" : "Looks good — continue"}</Button>
       </div>
     </form>
@@ -160,7 +159,7 @@ function AddonStep({ onBack, onDone }: { onBack: () => void; onDone: () => Promi
         <Button variant="ghost" onClick={onBack}>← Back</Button>
         <div className="flex items-center gap-3">
           {extra > 0 && <span className="text-sm text-slate-500">+{money(extra)}/mo</span>}
-          <Button onClick={next} disabled={busy}>{busy ? "Installing…" : picked.length ? `Install ${picked.length} & continue` : "Skip for now"}</Button>
+          <Button onClick={next} disabled={busy}>{busy ? "Installing…" : picked.length ? `Install ${picked.length} & continue` : "Continue without add-ons"}</Button>
         </div>
       </div>
     </div>

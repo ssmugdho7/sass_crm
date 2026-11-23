@@ -6,9 +6,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('public')->group(function () {
     Route::post('invoices/{token}/checkout', [StripeController::class, 'checkout'])->middleware('throttle:20,1');
-    Route::post('stripe/webhook/{tenantSlug}', [StripeController::class, 'webhook'])->middleware('throttle:120,1');
+    // Keyed URL (stable across slug changes); a tenant slug is still accepted as a deprecated fallback.
+    Route::post('stripe/webhook/{webhookKey}', [StripeController::class, 'webhook'])->middleware('throttle:120,1');
     Route::get('google/callback', [GoogleCalendarController::class, 'callback'])->middleware('throttle:30,1');
 });
+
+Route::middleware(['auth:sanctum', 'tenant', 'module:payment_gateway', 'perm:payments.manage'])
+    ->get('app/integrations/stripe/webhook-url', [StripeController::class, 'webhookUrl']);
 
 Route::middleware(['auth:sanctum', 'tenant', 'module:google_calendar', 'perm:calendar.manage'])
     ->prefix('app/integrations/google')->group(function () {

@@ -54,6 +54,29 @@ const iconFor = (category: string | null) => {
   return (["kitchen", "bath", "roof", "commercial", "addition"] as const).find((k) => c.includes(k)) ?? "home";
 };
 
+/**
+ * Owner-preview-only stand-in for an empty section, linking to the editor tab that fills it.
+ * Never rendered on the public site (SiteBody only uses it when `preview` is set).
+ */
+export function DraftPlaceholder({ id, eyebrow, title, text, tab, cta }: { id: string; eyebrow: string; title: string; text: string; tab: string; cta: string }) {
+  return (
+    <section id={id} className="scroll-mt-20 py-14">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+          <p className="text-sm font-semibold uppercase tracking-wider text-[var(--accent)]">{eyebrow}</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{title}</h2>
+          <p className="mx-auto mt-2 max-w-xl text-slate-600">{text}</p>
+          <Link href={`/app/website?tab=${tab}`}
+            className="mt-5 inline-flex rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2">
+            {cta} →
+          </Link>
+          <p className="mt-3 text-xs text-slate-500">Only you see this placeholder — it is hidden on your public website.</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function Hero({ site, base }: { site: PublicSite; base: string }) {
   const s = site.settings;
   const stats = [

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { crm } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
@@ -38,9 +39,22 @@ const PUBLISH_MIN_DONE = 3;
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2";
 
-export default function WebsiteBuilderPage() {
+export default function Page() {
+  return <Suspense fallback={<Spinner />}><WebsiteBuilderPage /></Suspense>;
+}
+
+function WebsiteBuilderPage() {
   const { me } = useSession();
-  const [tab, setTab] = useState<Tab>("branding");
+  const params = useSearchParams();
+  const initialTab = params.get("tab");
+  const [tab, setTabState] = useState<Tab>(isTab(initialTab) ? initialTab : "branding");
+  // Keep ?tab= in the URL so links like /app/website?tab=services (from the draft preview) and reloads land on the right tab.
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", t);
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  };
   const { data: settings, setData: setSettings, error } = useFetch<SiteSettings>("/app/website/settings");
   const { data: checklist, reload: loadChecklist } = useFetch<Checklist>("/app/website/checklist");
   const [saveError, setSaveError] = useState<unknown>(null);
@@ -99,10 +113,11 @@ export default function WebsiteBuilderPage() {
   };
 
   const settingsTab = ["branding", "hero", "contact"].includes(tab);
+  const showSaveBar = settingsTab && (dirty || saving || !!saveError);
   const [, tabLabel, anchor] = TABS.find(([k]) => k === tab)!;
 
   return (
-    <div className="min-w-0 space-y-6">
+    <div className={`min-w-0 space-y-6 ${showSaveBar ? "pb-16" : ""}`}>
       <PageHeader
         title="Website"
         subtitle="Your public company website grows from the content you add here."
@@ -186,12 +201,15 @@ export default function WebsiteBuilderPage() {
           {tab === "branding" && <BrandingForm s={settings} set={set} err={saveError} />}
           {tab === "hero" && <HeroForm s={settings} set={set} err={saveError} />}
           {tab === "contact" && <ContactForm s={settings} set={set} err={saveError} />}
-          <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50/95 py-3 backdrop-blur">
-            <ErrorText error={saveError} />
-            {!saveError && savedAt && !dirty && <span className="text-sm text-emerald-600">Saved</span>}
-            {dirty && <span className="text-sm text-slate-500">Unsaved changes</span>}
-            <Button disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
-          </div>
+          {showSaveBar ? (
+            <div className="sticky bottom-0 z-20 flex min-h-16 flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-4px_12px_-4px_rgba(15,23,42,0.12)] rounded-t-lg">
+              <ErrorText error={saveError} />
+              {dirty && <span className="mr-auto text-sm text-slate-600">You have unsaved changes</span>}
+              <Button disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+            </div>
+          ) : (
+            savedAt && <p role="status" className="text-right text-sm text-emerald-700">All changes saved</p>
+          )}
         </form>
       )}
 

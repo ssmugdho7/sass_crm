@@ -2,19 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import type { Catalog } from "./catalog";
 
-export type PublicPlan = {
-  id: number;
-  name: string;
-  slug: string;
-  price_monthly: number;
-  price_yearly: number;
-  max_users: number;
-  features: string[] | null;
-  included_modules: string[] | null;
-};
-export type PublicAddon = { key: string; name: string; description: string; price: number };
-export type Catalog = { plans: PublicPlan[]; addons: PublicAddon[] };
+export type { Catalog, PublicAddon, PublicPlan } from "./catalog";
 
 /** Loads GET /api/public/plans once on mount. */
 export function useCatalog() {

@@ -64,7 +64,7 @@ class AddonTest extends AccountTestCase
         $this->assertSame('pk_test_1', $fields['publishable_key']['value']);
 
         $this->putJson('/api/app/addons/payment_gateway/config', ['secret_key' => '', 'publishable_key' => 'pk_test_2'])->assertOk();
-        $config = TenantModule::where('module_key', 'payment_gateway')->first()->config;
+        $config = TenantModule::withoutGlobalScope('tenant')->where('tenant_id', $this->tenant()->id)->where('module_key', 'payment_gateway')->first()->config;
         $this->assertSame('sk_test_abcdWXYZ', $config['secret_key']);
         $this->assertSame('pk_test_2', $config['publishable_key']);
         $this->assertArrayNotHasKey('not_in_schema', $config);

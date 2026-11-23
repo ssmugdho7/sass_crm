@@ -31,13 +31,13 @@ class SiteCollectionController
         return $common + match ($collection) {
             'services' => [
                 'title' => "$req|string|max:255", 'summary' => 'nullable|string|max:500', 'body' => 'nullable|string|max:10000',
-                'icon' => 'nullable|string|max:50', 'image_url' => 'nullable|url|max:2048',
+                'icon' => 'nullable|string|max:50', 'image_url' => 'nullable|url:http,https|max:2048',
                 'price_from' => 'nullable|integer|min:0', 'is_published' => 'sometimes|boolean',
             ],
             'portfolio' => [
                 'title' => "$req|string|max:255", 'location' => 'nullable|string|max:255', 'category' => 'nullable|string|max:100',
-                'description' => 'nullable|string|max:10000', 'cover_url' => 'nullable|url|max:2048',
-                'images' => 'nullable|array|max:30', 'images.*' => 'url|max:2048', 'completed_on' => 'nullable|date',
+                'description' => 'nullable|string|max:10000', 'cover_url' => 'nullable|url:http,https|max:2048',
+                'images' => 'nullable|array|max:30', 'images.*' => 'url:http,https|max:2048', 'completed_on' => 'nullable|date',
                 'is_published' => 'sometimes|boolean',
             ],
             'testimonials' => [
@@ -46,7 +46,7 @@ class SiteCollectionController
             ],
             'team' => [
                 'name' => "$req|string|max:255", 'role' => 'nullable|string|max:255',
-                'photo_url' => 'nullable|url|max:2048', 'bio' => 'nullable|string|max:3000',
+                'photo_url' => 'nullable|url:http,https|max:2048', 'bio' => 'nullable|string|max:3000',
             ],
             'faqs' => ['question' => "$req|string|max:255", 'answer' => "$req|string|max:5000"],
         };

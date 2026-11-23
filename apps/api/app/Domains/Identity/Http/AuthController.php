@@ -6,6 +6,7 @@ use App\Domains\Identity\Actions\RegisterTenant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController
@@ -18,7 +19,7 @@ class AuthController
             'email' => 'required|email|max:190|unique:users,email',
             'phone' => 'nullable|string|max:40',
             'password' => 'required|string|min:8',
-            'plan' => 'nullable|string|exists:plans,slug',
+            'plan' => ['nullable', 'string', Rule::exists('plans', 'slug')->where('is_active', true)],
         ]);
         $user = $register($data);
 

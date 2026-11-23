@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Plan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -30,5 +31,13 @@ class AuthTest extends TestCase
         $this->postJson('/api/auth/register', [
             'company' => 'Acme Roofing', 'name' => 'Ann', 'email' => 'ann@acme.test', 'password' => 'secret123', 'plan' => 'starter',
         ])->assertCreated()->assertJsonPath('user.tenant.slug', 'acme-roofing')->assertJsonPath('user.role.slug', 'owner');
+    }
+
+    public function test_register_rejects_inactive_plan(): void
+    {
+        Plan::where('slug', 'starter')->update(['is_active' => false]);
+        $this->postJson('/api/auth/register', [
+            'company' => 'Acme Roofing', 'name' => 'Ann', 'email' => 'ann@acme.test', 'password' => 'secret123', 'plan' => 'starter',
+        ])->assertStatus(422)->assertJsonValidationErrors('plan');
     }
 }

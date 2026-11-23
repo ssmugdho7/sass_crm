@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { can, crm, formatDate, money, toCents, toDollars } from "@/lib/api";
 import { useFetch } from "@/lib/useFetch";
 import { useSession } from "@/lib/session";
-import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Table, Textarea, fieldError } from "@/components/ui";
+import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Spinner, Textarea, fieldError } from "@/components/ui";
 import {
   IconButton, LEAD_SOURCES, LEAD_STATUSES, ListEmpty, MobileList, Pager, idOrNull, label, orNull, tone, useDebounced, useUsers,
   type Lead, type Page,
@@ -189,28 +189,46 @@ function LeadsPage() {
                 </div>
               )}
             />
-            <div className="hidden sm:block">
-              <Table
-                rows={data.data}
-                columns={[
-                  ["Name", (l) => {
+            <div className="hidden overflow-x-auto sm:block">
+              {/* Local table (not ui/Table) so low-value columns can collapse per breakpoint and the row fits ≥1280px without scrolling. */}
+              <table className="w-full table-fixed text-left text-sm">
+                <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="w-[34%] px-3 py-2 font-medium xl:w-[28%]">Lead</th>
+                    <th className="w-[22%] px-3 py-2 font-medium">Service</th>
+                    <th className="w-[13%] px-3 py-2 font-medium">Value</th>
+                    <th className="w-[13%] px-3 py-2 font-medium">Status</th>
+                    <th className="hidden w-[12%] px-3 py-2 font-medium xl:table-cell">Assigned</th>
+                    <th className="w-[9.5rem] px-3 py-2 font-medium"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {data.data.map((l) => {
                     const sub = [l.company, l.email, l.phone].filter(Boolean).join(" · ");
                     return (
-                      <div className="min-w-[10rem] max-w-[16rem]">
-                        <p className="truncate font-medium text-slate-900" title={l.name}>{l.name}</p>
-                        {sub && <p className="truncate text-xs text-slate-500" title={sub}>{sub}</p>}
-                      </div>
+                      <tr key={l.id} className="align-top">
+                        <td className="px-3 py-2.5 text-slate-700">
+                          <p className="truncate font-medium text-slate-900" title={l.name}>{l.name}</p>
+                          {sub && <p className="truncate text-xs text-slate-500" title={sub}>{sub}</p>}
+                          <p className="text-xs text-slate-500">Received {formatDate(l.created_at)}</p>
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700">
+                          <p className="truncate" title={l.service ?? undefined}>{l.service || "—"}</p>
+                          <p className="truncate text-xs text-slate-500">{label(l.source)}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{money(l.value)}</td>
+                        <td className="px-3 py-2.5"><Badge tone={tone(l.status)}>{l.status}</Badge></td>
+                        <td className="hidden px-3 py-2.5 text-slate-700 xl:table-cell">
+                          <p className="truncate" title={l.assignee?.name}>{l.assignee?.name ?? "—"}</p>
+                        </td>
+                        <td className="px-2 py-2">
+                          {manage && <div className="flex items-center justify-end gap-0.5 whitespace-nowrap">{actions(l)}</div>}
+                        </td>
+                      </tr>
                     );
-                  }],
-                  ["Service", (l) => <span className="block max-w-[10rem] truncate whitespace-nowrap" title={l.service ?? undefined}>{l.service || "—"}</span>],
-                  ["Source", (l) => <span className="whitespace-nowrap">{label(l.source)}</span>],
-                  ["Value", (l) => <span className="whitespace-nowrap">{money(l.value)}</span>],
-                  ["Status", (l) => <Badge tone={tone(l.status)}>{l.status}</Badge>],
-                  ["Received", (l) => <span className="whitespace-nowrap">{formatDate(l.created_at)}</span>],
-                  ["Assigned", (l) => <span className="block max-w-[8rem] truncate whitespace-nowrap" title={l.assignee?.name}>{l.assignee?.name ?? "—"}</span>],
-                  ["", (l) => manage && <div className="flex items-center justify-end gap-0.5 whitespace-nowrap">{actions(l)}</div>],
-                ]}
-              />
+                  })}
+                </tbody>
+              </table>
             </div>
             <Pager page={data.current_page} last={data.last_page} onPage={setPage} />
           </>

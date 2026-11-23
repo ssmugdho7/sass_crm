@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: "Simple plans for construction businesses. 14-day free trial, no credit card required.",
 };
 
+// Re-render at most every 5 minutes so plan prices (fetched server-side) stay fresh, and recover if the API was down at build.
+export const revalidate = 300;
+
 export default function PricingPage() {
   return (
     <>

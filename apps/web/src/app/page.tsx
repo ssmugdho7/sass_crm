@@ -45,6 +45,9 @@ function Icon({ d }: { d: string }) {
   );
 }
 
+// Re-render at most every 5 minutes so plan prices (fetched server-side) stay fresh, and recover if the API was down at build.
+export const revalidate = 300;
+
 export default function Home() {
   return (
     <>

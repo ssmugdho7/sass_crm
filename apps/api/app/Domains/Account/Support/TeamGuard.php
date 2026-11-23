@@ -61,5 +61,8 @@ class TeamGuard
         }
         abort_if($actor->role_id === $role->id, 403, 'You cannot edit your own role.');
         abort_if(self::grantsFull($role->permissions), 403, 'Only users with full access can edit this role.');
+        // Editing/deleting a role changes access for everyone in it, so the actor must already hold all of it.
+        $missing = array_filter($role->permissions ?? [], fn ($p) => ! $actor->hasPermission($p));
+        abort_if($missing !== [], 403, 'You cannot change a role that has permissions you do not hold: '.implode(', ', $missing));
     }
 }
